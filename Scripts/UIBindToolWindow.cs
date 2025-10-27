@@ -40,6 +40,7 @@ public class UIBindToolWindow : EditorWindow
 
     // 设置模式相关
     private bool m_IsSettingsMode = false; // 是否处于设置模式
+    private string m_currentSelectedSettingsDataName = "";
     private static UIBindToolSettingsData s_SettingsData; // 设置数据单例
 
     public GUID PrefabGuid => m_PrefabGuid;
@@ -182,6 +183,15 @@ public class UIBindToolWindow : EditorWindow
         // 加载设置数据
         GetOrCreateSettingsData();
 
+        // 设置数据管理器的设置数据
+        if (s_SettingsData != null)
+        {
+            //默认选择第一个设置数据项
+            var lastSelectedItem = s_SettingsData.GetLastSelectedSettingsDataItem();
+            m_currentSelectedSettingsDataName = lastSelectedItem.settingsDataName;
+            UIBindDataManager.SetSettingsData(lastSelectedItem);
+        }
+
         InitData(Selection.activeGameObject);
 
         // 同步绑定数据与UI面板状态
@@ -304,10 +314,12 @@ public class UIBindToolWindow : EditorWindow
     {
         // 左侧显示UIPanel名称
         string panelName = GetDisplayPanelName();
-        EditorGUILayout.LabelField(panelName, EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+        EditorGUILayout.LabelField($"{m_currentSelectedSettingsDataName} Mode : {panelName}", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
 
         // 分隔符
         //GUILayout.Space(10);
+        // 右侧弹性空间
+        GUILayout.FlexibleSpace();
 
         // 折叠全部按钮
         if (GUILayout.Button("折叠全部", EditorStyles.toolbarButton))
@@ -320,9 +332,6 @@ public class UIBindToolWindow : EditorWindow
         {
             ExpandAll();
         }
-
-        // 右侧弹性空间
-        GUILayout.FlexibleSpace();
 
         // 预览按钮
         if (GUILayout.Button("预览", EditorStyles.toolbarButton, GUILayout.Width(50)))

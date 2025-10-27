@@ -10,8 +10,28 @@ using UnityEngine;
 /// </summary>
 public class UIBindDataManager
 {
-    private static readonly string BIND_DATA_FOLDER = "Assets/UIBindData";
+    private static UIBindToolSettingsDataItem s_SettingsData;
+    private static readonly string BIND_DATA_FOLDER = "Assets/UIBindData"; // 默认值，会被设置覆盖
     private static readonly string BIND_DATA_EXTENSION = ".asset";
+
+    /// <summary>
+    /// 设置设置数据
+    /// </summary>
+    public static void SetSettingsData(UIBindToolSettingsDataItem settingsData)
+    {
+        s_SettingsData = settingsData;
+    }
+
+    /// <summary>
+    /// 获取绑定数据文件夹路径
+    /// </summary>
+    private static string GetBindDataFolder()
+    {
+        Debug.Log(s_SettingsData.bindDataFolder);
+        return s_SettingsData != null && !string.IsNullOrEmpty(s_SettingsData.bindDataFolder)
+            ? s_SettingsData.bindDataFolder
+            : BIND_DATA_FOLDER;
+    }
 
     /// <summary>
     /// 获取或创建指定面板的绑定数据
@@ -120,7 +140,7 @@ public class UIBindDataManager
     /// <returns>所有UIPanelBindings资源</returns>
     public static UIPanelBindings[] GetAllBindings()
     {
-        var allDataGUIDs = AssetDatabase.FindAssets("", new[] { BIND_DATA_FOLDER });
+        var allDataGUIDs = AssetDatabase.FindAssets("", new[] { GetBindDataFolder() });
         UIPanelBindings[] bindings = new UIPanelBindings[allDataGUIDs.Length];
         for (int i = 0; i < allDataGUIDs.Length; i++)
         {
@@ -136,9 +156,10 @@ public class UIBindDataManager
     /// </summary>
     private static void EnsureFolderExists()
     {
-        if (!Directory.Exists(BIND_DATA_FOLDER))
+        string folderPath = GetBindDataFolder();
+        if (!Directory.Exists(folderPath))
         {
-            Directory.CreateDirectory(BIND_DATA_FOLDER);
+            Directory.CreateDirectory(folderPath);
             AssetDatabase.Refresh();
         }
     }
@@ -165,7 +186,7 @@ public class UIBindDataManager
         // 使用面板名称作为文件名，确保唯一性
         string fileName = targetPanel.name;
         string safeFileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
-        return $"{BIND_DATA_FOLDER}/{safeFileName}{BIND_DATA_EXTENSION}";
+        return $"{GetBindDataFolder()}/{safeFileName}{BIND_DATA_EXTENSION}";
     }
 
     public static void UpdateBindingInstanceData(UIPanelBindings bindings,GameObject panelInstance)
