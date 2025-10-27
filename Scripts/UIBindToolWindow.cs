@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 public class UIBindToolWindow : EditorWindow
 {
-    private const string MENU_PATH = "GameObject/UI Binding";
+    private const string MENU_PATH = "GameObject/UI Binding &e";
     private GameObject bindTarget;
     private GameObject bindTargetPrefab;
     private List<KeyValuePair<int, (GameObject obj,GameObject objPrefab)>> bindableObjects = new List<KeyValuePair<int, (GameObject,GameObject)>>();
@@ -40,7 +40,9 @@ public class UIBindToolWindow : EditorWindow
 
     // 设置模式相关
     private bool m_IsSettingsMode = false; // 是否处于设置模式
-    private string m_currentSelectedSettingsDataName = "";
+    private int m_SelectedSettingsIndex = 0; // 当前选中的设置索引
+    private string[] m_SettingsNames = new string[0]; // 设置名称数组
+    private Vector2 m_SettingsScrollPosition = Vector2.zero; // 设置界面滚动位置
     private static UIBindToolSettingsData s_SettingsData; // 设置数据单例
 
     public GUID PrefabGuid => m_PrefabGuid;
@@ -91,12 +93,18 @@ public class UIBindToolWindow : EditorWindow
         bindTarget = target;
         bindableObjects.Clear();
         bindTargetPrefab = PrefabUtility.GetCorrespondingObjectFromSource(bindTarget);
-        GetBindableObjectsWithStructure(bindTarget,bindTargetPrefab);
+        GetBindableObjectsWithStructure(bindTarget, bindTargetPrefab);
         //获取Prefab的GUID
         m_PrefabGuid = UIBindDataManager.GetPrefabGUID(bindTarget);
-        if(m_PrefabGuid != default)Debug.Log($"Prefab GUID: {m_PrefabGuid}");
+        if (m_PrefabGuid != default) Debug.Log($"Prefab GUID: {m_PrefabGuid}");
 
         //尝试加载绑定数据
+        UpdateCurrentBindingsData();
+    }
+
+    private void UpdateCurrentBindingsData()
+    {
+        m_CurrentBindings = null;
         var allBindingDatas = UIBindDataManager.GetAllBindings();
         foreach (var bindingData in allBindingDatas)
         {
@@ -165,19 +173,7 @@ public class UIBindToolWindow : EditorWindow
         }
     }
 
-    /// <summary>
-    /// 保存设置数据
-    /// </summary>
-    private static void SaveSettingsData()
-    {
-        if (s_SettingsData != null)
-        {
-            EditorUtility.SetDirty(s_SettingsData);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-        }
-    }
-
+    
     void OnEnable()
     {
         // 加载设置数据
@@ -186,10 +182,13 @@ public class UIBindToolWindow : EditorWindow
         // 设置数据管理器的设置数据
         if (s_SettingsData != null)
         {
+            //初始化设置选项
+            UpdateSettingsOptions();
             //默认选择第一个设置数据项
             var lastSelectedItem = s_SettingsData.GetLastSelectedSettingsDataItem();
-            m_currentSelectedSettingsDataName = lastSelectedItem.settingsDataName;
-            UIBindDataManager.SetSettingsData(lastSelectedItem);
+            m_SelectedSettingsIndex = System.Array.IndexOf(m_SettingsNames, lastSelectedItem.settingsDataName);
+            if (m_SelectedSettingsIndex < 0) m_SelectedSettingsIndex = 0;
+            UIBindDataManager.SetSettingsDataContainer(s_SettingsData);
         }
 
         InitData(Selection.activeGameObject);
@@ -217,6 +216,9 @@ public class UIBindToolWindow : EditorWindow
 
         // 在 TreeView 构造时传入 Header 和组件名称列表
         m_UIBindToolTreeView = new(m_TreeViewState, multiColumnHeader, this, bindableObjects, bindTarget);
+
+        //默认展开
+        ExpandAll();
     }
 
     void OnDisable()
@@ -314,24 +316,44 @@ public class UIBindToolWindow : EditorWindow
     {
         // 左侧显示UIPanel名称
         string panelName = GetDisplayPanelName();
-        EditorGUILayout.LabelField($"{m_currentSelectedSettingsDataName} Mode : {panelName}", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+        string currentSettingsName = m_SelectedSettingsIndex >= 0 && m_SelectedSettingsIndex < m_SettingsNames.Length
+            ? m_SettingsNames[m_SelectedSettingsIndex]
+            : "Default";
+        EditorGUILayout.LabelField($"{currentSettingsName} Mode : {panelName}", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
 
-        // 分隔符
-        //GUILayout.Space(10);
         // 右侧弹性空间
         GUILayout.FlexibleSpace();
+        // 设置下拉选择框
+        if (m_SettingsNames.Length > 0)
+        {
+            EditorGUILayout.LabelField("Mode:", GUILayout.Width(40));
+            int newIndex = EditorGUILayout.Popup(m_SelectedSettingsIndex, m_SettingsNames, GUILayout.Width(100));
+            if (newIndex != m_SelectedSettingsIndex)
+            {
+                m_SelectedSettingsIndex = newIndex;
+                OnSettingsSelectionChanged();
+                UpdateCurrentBindingsData();
+                Repaint();
+            }
+        }
+
+        // 分隔符
+        GUILayout.Space(5);
 
         // 折叠全部按钮
-        if (GUILayout.Button("折叠全部", EditorStyles.toolbarButton))
+        if (GUILayout.Button("折叠", EditorStyles.toolbarButton))
         {
             CollapseAll();
         }
 
         // 展开全部按钮
-        if (GUILayout.Button("展开全部", EditorStyles.toolbarButton))
+        if (GUILayout.Button("展开", EditorStyles.toolbarButton))
         {
             ExpandAll();
         }
+
+        // 分隔符
+        GUILayout.Space(5);
 
         // 预览按钮
         if (GUILayout.Button("预览", EditorStyles.toolbarButton, GUILayout.Width(50)))
@@ -359,7 +381,7 @@ public class UIBindToolWindow : EditorWindow
 
         // 字体大小调整输入框
         EditorGUILayout.LabelField("字体大小:", GUILayout.Width(60));
-        string fontSizeText = EditorGUILayout.TextField(m_CodeFontSize.ToString("F0"), GUILayout.Width(40));
+        string fontSizeText = EditorGUILayout.TextField(m_CodeFontSize.ToString("F0"), GUILayout.Width(32));
 
         // 尝试解析新的字体大小
         if (float.TryParse(fontSizeText, out float newFontSize) &&
@@ -370,8 +392,8 @@ public class UIBindToolWindow : EditorWindow
             Repaint();
         }
 
-        // 弹性空间
-        GUILayout.FlexibleSpace();
+        // 分隔符
+        GUILayout.Space(5);
 
         // 生成按钮
         if (GUILayout.Button("生成", EditorStyles.toolbarButton, GUILayout.Width(50)))
@@ -391,8 +413,11 @@ public class UIBindToolWindow : EditorWindow
     /// </summary>
     private void DrawSettingsToolbarContent()
     {
+        string currentSettingsName = m_SelectedSettingsIndex >= 0 && m_SelectedSettingsIndex < m_SettingsNames.Length
+            ? m_SettingsNames[m_SelectedSettingsIndex]
+            : "Default";
         // 左侧显示"设置"
-        EditorGUILayout.LabelField("设置", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+        EditorGUILayout.LabelField($"{currentSettingsName} Mode:设置", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
 
         // 弹性空间
         GUILayout.FlexibleSpace();
@@ -400,8 +425,7 @@ public class UIBindToolWindow : EditorWindow
         // 保存按钮
         if (GUILayout.Button("保存", EditorStyles.toolbarButton, GUILayout.Width(50)))
         {
-            // TODO: 实现保存设置功能
-            SaveSettingsData();
+            SaveCurrentSettings();
         }
 
         // 关闭按钮
@@ -578,7 +602,7 @@ public class UIBindToolWindow : EditorWindow
 
         // 计算文本区域大小 - 确保宽度与窗口宽度匹配
         Vector2 textSize = codeStyle.CalcSize(new GUIContent(sampleCode));
-        float contentWidth = Mathf.Max(textSize.x, previewArea.width - 40); // 确保最小宽度，留出滚动条空间
+        float contentWidth = Mathf.Max(textSize.x, previewArea.width - 30); // 确保最小宽度，留出滚动条空间
         float contentHeight = textSize.y;
 
         // 开始滚动视图，覆盖整个预览区域
@@ -598,18 +622,58 @@ public class UIBindToolWindow : EditorWindow
     /// </summary>
     private void DrawSettingsArea(Rect settingsArea)
     {
-        // 绘制背景
-        EditorGUI.DrawRect(settingsArea, new Color(0.2f, 0.2f, 0.2f, 1f));
-
-        // 居中显示设置占位文本
-        GUIStyle labelStyle = new(EditorStyles.centeredGreyMiniLabel)
+        // 获取当前设置项
+        var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
+        if (currentSettings == null)
         {
-            fontSize = 14,
-            normal = { textColor = Color.white },
-            alignment = TextAnchor.MiddleCenter
-        };
+            // 显示无设置提示
+            GUIStyle labelStyle = new(EditorStyles.centeredGreyMiniLabel)
+            {
+                fontSize = 14,
+                normal = { textColor = Color.white },
+                alignment = TextAnchor.MiddleCenter
+            };
+            EditorGUI.LabelField(settingsArea, "无可用设置项\n请先在设置下拉框中选择配置", labelStyle);
+            return;
+        }
 
-        EditorGUI.LabelField(settingsArea, "设置界面占位\n(具体功能待实现)", labelStyle);
+        // 开始滚动区域
+        Rect rect = new Rect(settingsArea.x + 10, settingsArea.y, settingsArea.width - 20, settingsArea.height - 10);
+        EditorGUI.DrawRect(rect, new Color(0.2f, 0.2f, 0.2f, 1f));
+
+        GUILayout.BeginArea(rect);
+        m_SettingsScrollPosition = EditorGUILayout.BeginScrollView(m_SettingsScrollPosition);
+
+        EditorGUILayout.Space(10);
+        // 绘制各个设置字段
+        DrawSettingsName(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawBindDataFolder(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawGenerateUIBindScriptFolder(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawGenerateUILogicScriptFolder(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawScriptCombinedMethod(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawBaseClassOrInterfaceNames(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawNamespaceSettings(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawAutoAttachScripts(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawAutoOpenGeneratedScripts(currentSettings);
+
+        EditorGUILayout.EndScrollView();
+        GUILayout.EndArea();
     }
 
     /// <summary>
@@ -722,6 +786,417 @@ public class UIBindToolWindow : EditorWindow
             return "未选择面板";
         }
     }
+
+    /// <summary>
+    /// 更新设置选项列表
+    /// </summary>
+    private void UpdateSettingsOptions()
+    {
+        if (s_SettingsData != null)
+        {
+            m_SettingsNames = s_SettingsData.GetAllSettingsDataNames();
+        }
+        else
+        {
+            m_SettingsNames = new string[0];
+        }
+    }
+
+    /// <summary>
+    /// 设置选择改变时的处理
+    /// </summary>
+    private void OnSettingsSelectionChanged()
+    {
+        if (s_SettingsData != null && m_SelectedSettingsIndex >= 0 && m_SelectedSettingsIndex < m_SettingsNames.Length)
+        {
+            string selectedName = m_SettingsNames[m_SelectedSettingsIndex];
+            var selectedItem = s_SettingsData.GetSettingsDataItemByName(selectedName);
+            if (selectedItem != null)
+            {
+                UIBindDataManager.SetCurrentSettingsItem(selectedItem);
+                Debug.Log($"切换到设置: {selectedName}");
+            }
+        }
+    }
+
+    #region 设置界面绘制方法
+
+    /// <summary>
+    /// 绘制设置名称
+    /// </summary>
+    private void DrawSettingsName(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField($"设置名称 : {settings.settingsDataName}", GUILayout.Width(200));
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制绑定数据文件夹
+    /// </summary>
+    private void DrawBindDataFolder(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("绑定数据文件夹:", GUILayout.Width(100));
+
+        // 只读输入框（使用EditorStyles.label样式实现只读效果）
+        EditorGUI.BeginDisabledGroup(true);
+        EditorGUILayout.LabelField(settings.bindDataFolder, EditorStyles.textField);
+        EditorGUI.EndDisabledGroup();
+
+        // 文件夹选择按钮
+        if (GUILayout.Button(EditorGUIUtility.IconContent("Folder On Icon"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+        {
+            string selectedPath = EditorUtility.OpenFolderPanel("选择绑定数据文件夹", "Assets", "");
+            if (!string.IsNullOrEmpty(selectedPath) && selectedPath.Contains("Assets"))
+            {
+                // 转换为相对路径
+                int assetsIndex = selectedPath.IndexOf("Assets");
+                if (assetsIndex >= 0)
+                {
+                    string relativePath = selectedPath.Substring(assetsIndex);
+                    relativePath = relativePath.Replace('\\', '/'); // 确保使用正斜杠
+                    settings.bindDataFolder = relativePath;
+                }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制脚本结合方式
+    /// </summary>
+    private void DrawScriptCombinedMethod(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.LabelField("脚本结合方式:", EditorStyles.boldLabel);
+
+        EditorGUILayout.BeginHorizontal();
+
+        // 获取所有枚举值
+        var enumValues = System.Enum.GetValues(typeof(ScriptCombinedMethod));
+        int selectedIndex = 0;
+
+        // 找到当前选中的索引
+        for (int i = 0; i < enumValues.Length; i++)
+        {
+            if ((ScriptCombinedMethod)enumValues.GetValue(i) == settings.scriptCombinedMethod)
+            {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        // 绘制选项按钮
+        for (int i = 0; i < enumValues.Length; i++)
+        {
+            ScriptCombinedMethod method = (ScriptCombinedMethod)enumValues.GetValue(i);
+            bool isSelected = (i == selectedIndex);
+
+            // 设置按钮样式
+            if (isSelected)
+            {
+                GUI.backgroundColor = Color.cyan;
+            }
+
+            // 获取友好的显示名称
+            string displayName = GetScriptCombinedMethodDisplayName(method);
+
+            if (GUILayout.Button(displayName))
+            {
+                settings.scriptCombinedMethod = method;
+            }
+
+            // 恢复颜色
+            GUI.backgroundColor = Color.white;
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制UI绑定脚本文件夹
+    /// </summary>
+    private void DrawGenerateUIBindScriptFolder(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("UI绑定脚本文件夹:", GUILayout.Width(100));
+
+        // 只读输入框
+        EditorGUI.BeginDisabledGroup(true);
+        EditorGUILayout.LabelField(settings.generateUIBindScriptFolder, EditorStyles.textField);
+        EditorGUI.EndDisabledGroup();
+
+        if (GUILayout.Button(EditorGUIUtility.IconContent("Folder On Icon"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+        {
+            string selectedPath = EditorUtility.OpenFolderPanel("选择UI绑定脚本文件夹", "Assets", "");
+            if (!string.IsNullOrEmpty(selectedPath) && selectedPath.Contains("Assets"))
+            {
+                int assetsIndex = selectedPath.IndexOf("Assets");
+                if (assetsIndex >= 0)
+                {
+                    string relativePath = selectedPath.Substring(assetsIndex);
+                    relativePath = relativePath.Replace('\\', '/');
+                    settings.generateUIBindScriptFolder = relativePath;
+                }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制UI逻辑脚本文件夹
+    /// </summary>
+    private void DrawGenerateUILogicScriptFolder(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("UI逻辑脚本文件夹:", GUILayout.Width(100));
+
+        // 只读输入框
+        EditorGUI.BeginDisabledGroup(true);
+        EditorGUILayout.LabelField(settings.generateUILogicScriptFolder, EditorStyles.textField);
+        EditorGUI.EndDisabledGroup();
+
+        if (GUILayout.Button(EditorGUIUtility.IconContent("Folder On Icon"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+        {
+            string selectedPath = EditorUtility.OpenFolderPanel("选择UI逻辑脚本文件夹", "Assets", "");
+            if (!string.IsNullOrEmpty(selectedPath) && selectedPath.Contains("Assets"))
+            {
+                int assetsIndex = selectedPath.IndexOf("Assets");
+                if (assetsIndex >= 0)
+                {
+                    string relativePath = selectedPath.Substring(assetsIndex);
+                    relativePath = relativePath.Replace('\\', '/');
+                    settings.generateUILogicScriptFolder = relativePath;
+                }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制基类或接口名称
+    /// </summary>
+    private void DrawBaseClassOrInterfaceNames(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("基类或接口名称:", GUILayout.Width(120));
+        string newValue = EditorGUILayout.TextField(settings.baseClassOrInterfaceNames);
+        if (newValue != settings.baseClassOrInterfaceNames)
+        {
+            settings.baseClassOrInterfaceNames = newValue;
+        }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制命名空间设置
+    /// </summary>
+    private void DrawNamespaceSettings(UIBindToolSettingsDataItem settings)
+    {
+        // Use Namespace Toggle
+        EditorGUILayout.BeginHorizontal();
+        bool newUseNamespace = EditorGUILayout.Toggle("使用命名空间", settings.useNamespace);
+        if (newUseNamespace != settings.useNamespace)
+        {
+            settings.useNamespace = newUseNamespace;
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(10);
+        // Script Namespace TextField
+        EditorGUILayout.BeginHorizontal();
+        EditorGUI.BeginDisabledGroup(!settings.useNamespace);
+        EditorGUILayout.LabelField("脚本命名空间:", GUILayout.Width(100));
+        // 使用BeginDisabledGroup来显示失活状态
+        string newNamespace = EditorGUILayout.TextField(settings.scriptNamespace);
+        if (newNamespace != settings.scriptNamespace && settings.useNamespace)
+        {
+            settings.scriptNamespace = newNamespace;
+        }
+        EditorGUI.EndDisabledGroup();
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制自动关联脚本设置
+    /// </summary>
+    private void DrawAutoAttachScripts(UIBindToolSettingsDataItem settings)
+    {
+        bool newValue = EditorGUILayout.Toggle("自动关联脚本到UI对象", settings.autoAttachScripts);
+        if (newValue != settings.autoAttachScripts)
+        {
+            settings.autoAttachScripts = newValue;
+        }
+    }
+
+    /// <summary>
+    /// 绘制自动打开生成脚本设置
+    /// </summary>
+    private void DrawAutoOpenGeneratedScripts(UIBindToolSettingsDataItem settings)
+    {
+        bool newValue = EditorGUILayout.Toggle("生成脚本后自动打开", settings.autoOpenGeneratedScripts);
+        if (newValue != settings.autoOpenGeneratedScripts)
+        {
+            settings.autoOpenGeneratedScripts = newValue;
+        }
+    }
+
+    /// <summary>
+    /// 保存当前设置
+    /// </summary>
+    private void SaveCurrentSettings()
+    {
+        var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
+        if (currentSettings == null)
+        {
+            EditorUtility.DisplayDialog("错误", "没有可保存的设置项", "确定");
+            return;
+        }
+
+        // 验证设置数据
+        if (!ValidateSettingsData(currentSettings))
+        {
+            return;
+        }
+
+        try
+        {
+            // 更新设置数据容器中的对应项
+            if (s_SettingsData != null)
+            {
+                // 查找对应的设置项并更新
+                for (int i = 0; i < s_SettingsData.settingsDataItems.Count; i++)
+                {
+                    if (s_SettingsData.settingsDataItems[i].settingsDataName == currentSettings.settingsDataName)
+                    {
+                        s_SettingsData.settingsDataItems[i] = currentSettings;
+                        break;
+                    }
+                }
+
+                // 保存ScriptableObject
+                EditorUtility.SetDirty(s_SettingsData);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+
+                // 更新UIBindDataManager中的设置
+                UIBindDataManager.SetCurrentSettingsItem(currentSettings);
+
+                EditorUtility.DisplayDialog("保存成功", "设置已成功保存", "确定");
+                Debug.Log($"设置 '{currentSettings.settingsDataName}' 已保存");
+            }
+        }
+        catch (System.Exception e)
+        {
+            EditorUtility.DisplayDialog("保存失败", $"保存设置时发生错误: {e.Message}", "确定");
+            Debug.LogError($"保存设置失败: {e}");
+        }
+    }
+
+    /// <summary>
+    /// 验证设置数据
+    /// </summary>
+    private bool ValidateSettingsData(UIBindToolSettingsDataItem settings)
+    {
+        // 验证文件夹路径
+        if (string.IsNullOrEmpty(settings.bindDataFolder))
+        {
+            EditorUtility.DisplayDialog("验证错误", "绑定数据文件夹不能为空", "确定");
+            return false;
+        }
+
+        if (!settings.bindDataFolder.StartsWith("Assets/"))
+        {
+            EditorUtility.DisplayDialog("验证错误", "绑定数据文件夹必须以 'Assets/' 开头", "确定");
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(settings.generateUIBindScriptFolder))
+        {
+            EditorUtility.DisplayDialog("验证错误", "UI绑定脚本文件夹不能为空", "确定");
+            return false;
+        }
+
+        if (!settings.generateUIBindScriptFolder.StartsWith("Assets/"))
+        {
+            EditorUtility.DisplayDialog("验证错误", "UI绑定脚本文件夹必须以 'Assets/' 开头", "确定");
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(settings.generateUILogicScriptFolder))
+        {
+            EditorUtility.DisplayDialog("验证错误", "UI逻辑脚本文件夹不能为空", "确定");
+            return false;
+        }
+
+        if (!settings.generateUILogicScriptFolder.StartsWith("Assets/"))
+        {
+            EditorUtility.DisplayDialog("验证错误", "UI逻辑脚本文件夹必须以 'Assets/' 开头", "确定");
+            return false;
+        }
+
+        // 验证命名空间
+        if (settings.useNamespace && string.IsNullOrEmpty(settings.scriptNamespace))
+        {
+            EditorUtility.DisplayDialog("验证错误", "启用命名空间时，脚本命名空间不能为空", "确定");
+            return false;
+        }
+
+        // 验证命名空间格式
+        if (settings.useNamespace && !IsValidNamespace(settings.scriptNamespace))
+        {
+            EditorUtility.DisplayDialog("验证错误", "脚本命名空间格式无效", "确定");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 验证命名空间格式
+    /// </summary>
+    private bool IsValidNamespace(string namespaceStr)
+    {
+        if (string.IsNullOrEmpty(namespaceStr))
+            return false;
+
+        // 简单的命名空间验证：只允许字母、数字、点和下划线
+        foreach (char c in namespaceStr)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '.' && c != '_')
+                return false;
+        }
+
+        // 不能以点开头或结尾
+        if (namespaceStr.StartsWith('.') || namespaceStr.EndsWith('.'))
+            return false;
+
+        // 不能有连续的点
+        if (namespaceStr.Contains(".."))
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// 获取脚本结合方式的显示名称
+    /// </summary>
+    private string GetScriptCombinedMethodDisplayName(ScriptCombinedMethod method)
+    {
+        return method switch
+        {
+            ScriptCombinedMethod.BaseClassInherit => "基类继承",
+            ScriptCombinedMethod.PartialClass => "部分类",
+            ScriptCombinedMethod.CompositeReference => "组合引用",
+            _ => method.ToString()
+        };
+    }
+
+    #endregion
 }
 
 /// <summary>

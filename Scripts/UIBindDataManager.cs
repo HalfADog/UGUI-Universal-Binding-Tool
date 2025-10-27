@@ -10,16 +10,43 @@ using UnityEngine;
 /// </summary>
 public class UIBindDataManager
 {
-    private static UIBindToolSettingsDataItem s_SettingsData;
+    private static UIBindToolSettingsData s_SettingsDataContainer;
+    private static UIBindToolSettingsDataItem s_CurrentSettingsItem;
     private static readonly string BIND_DATA_FOLDER = "Assets/UIBindData"; // 默认值，会被设置覆盖
     private static readonly string BIND_DATA_EXTENSION = ".asset";
 
     /// <summary>
-    /// 设置设置数据
+    /// 设置设置数据容器
     /// </summary>
-    public static void SetSettingsData(UIBindToolSettingsDataItem settingsData)
+    public static void SetSettingsDataContainer(UIBindToolSettingsData settingsDataContainer)
     {
-        s_SettingsData = settingsData;
+        s_SettingsDataContainer = settingsDataContainer;
+        // 设置默认选中的设置项
+        if (s_SettingsDataContainer != null)
+        {
+            SetCurrentSettingsItem(s_SettingsDataContainer.GetLastSelectedSettingsDataItem());
+        }
+    }
+
+    /// <summary>
+    /// 设置当前使用的设置项
+    /// </summary>
+    public static void SetCurrentSettingsItem(UIBindToolSettingsDataItem settingsItem)
+    {
+        s_CurrentSettingsItem = settingsItem;
+        // 更新最后选择的设置项名称
+        if (s_SettingsDataContainer != null && settingsItem != null)
+        {
+            s_SettingsDataContainer.lastSelectedSettingsDataName = settingsItem.settingsDataName;
+        }
+    }
+
+    /// <summary>
+    /// 获取当前设置项
+    /// </summary>
+    public static UIBindToolSettingsDataItem GetCurrentSettingsItem()
+    {
+        return s_CurrentSettingsItem;
     }
 
     /// <summary>
@@ -27,9 +54,8 @@ public class UIBindDataManager
     /// </summary>
     private static string GetBindDataFolder()
     {
-        Debug.Log(s_SettingsData.bindDataFolder);
-        return s_SettingsData != null && !string.IsNullOrEmpty(s_SettingsData.bindDataFolder)
-            ? s_SettingsData.bindDataFolder
+        return s_CurrentSettingsItem != null && !string.IsNullOrEmpty(s_CurrentSettingsItem.bindDataFolder)
+            ? s_CurrentSettingsItem.bindDataFolder
             : BIND_DATA_FOLDER;
     }
 
@@ -209,7 +235,6 @@ public class UIBindDataManager
                 AssetDatabase.TryGetGUIDAndLocalFileIdentifier(child.gameObject, out string guid, out long fileID);
                 string relativePath = UIPanelBindings.GetGameObjectRelativePath(prefabAsset, child.gameObject);
                 prefabObjectData[fileID] = relativePath;
-                //Debug.Log(relativePath);
             }
             //包括Prefab根对象
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(prefabAsset, out string rootGuid, out rootFileID);
