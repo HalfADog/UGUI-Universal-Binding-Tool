@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using TMPro;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
@@ -31,14 +32,28 @@ public class UIBindToolWindow : EditorWindow
     private GUID m_PrefabGuid; // 绑定的Prefab的GUID
     private UIPanelBindings m_CurrentBindings = null; // 当前面板的绑定数据
 
+    // 预览模式相关
+    private bool m_IsPreviewMode = false; // 是否处于预览模式
+    private Vector2 m_CodeScrollPosition = Vector2.zero; // 代码滚动位置
+    private string m_PreviewFileName = "UIBinding.cs"; // 预览文件名
+    private float m_CodeFontSize = 12f; // 代码字体大小
+
+    // 设置模式相关
+    private bool m_IsSettingsMode = false; // 是否处于设置模式
+    private static UIBindToolSettingsData s_SettingsData; // 设置数据单例
+
     public GUID PrefabGuid => m_PrefabGuid;
+    public static UIBindToolSettingsData SettingsData => s_SettingsData;
     public UIPanelBindings CurrentBindings
     {
         get => m_CurrentBindings;
         set
         {
-            m_CurrentBindings = value;
-            Repaint();
+            if (m_CurrentBindings != value)
+            {
+                m_CurrentBindings = value;
+                Repaint();
+            }
         }
     }
 
@@ -118,8 +133,55 @@ public class UIBindToolWindow : EditorWindow
         return PrefabUtility.GetPrefabInstanceStatus(obj) == PrefabInstanceStatus.Connected;
     }
 
+    /// <summary>
+    /// 获取或创建设置数据
+    /// </summary>
+    private static void GetOrCreateSettingsData()
+    {
+        if (s_SettingsData != null)
+            return;
+
+        const string SETTINGS_FOLDER = "Assets/Settings";
+        const string SETTINGS_ASSET_PATH = SETTINGS_FOLDER + "/UIBindToolSettingsData.asset";
+
+        // 确保Settings文件夹存在
+        if (!Directory.Exists(SETTINGS_FOLDER))
+        {
+            Directory.CreateDirectory(SETTINGS_FOLDER);
+            AssetDatabase.Refresh();
+        }
+
+        // 尝试加载现有设置
+        s_SettingsData = AssetDatabase.LoadAssetAtPath<UIBindToolSettingsData>(SETTINGS_ASSET_PATH);
+
+        // 如果不存在，创建新的设置数据
+        if (s_SettingsData == null)
+        {
+            s_SettingsData = ScriptableObject.CreateInstance<UIBindToolSettingsData>();
+            AssetDatabase.CreateAsset(s_SettingsData, SETTINGS_ASSET_PATH);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+    }
+
+    /// <summary>
+    /// 保存设置数据
+    /// </summary>
+    private static void SaveSettingsData()
+    {
+        if (s_SettingsData != null)
+        {
+            EditorUtility.SetDirty(s_SettingsData);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+    }
+
     void OnEnable()
     {
+        // 加载设置数据
+        GetOrCreateSettingsData();
+
         InitData(Selection.activeGameObject);
 
         // 同步绑定数据与UI面板状态
@@ -158,12 +220,28 @@ public class UIBindToolWindow : EditorWindow
         // 绘制ToolBar
         DrawToolbar();
 
-        // 更新列宽以适应窗口大小
-        UpdateColumnWidths();
+        // 根据模式绘制不同内容
+        if (m_IsPreviewMode)
+        {
+            // 绘制代码预览区域，留出ToolBar的空间
+            Rect rect = new Rect(0, 30, position.width, position.height - 30);
+            DrawCodePreviewArea(rect);
+        }
+        else if (m_IsSettingsMode)
+        {
+            // 绘制设置界面，留出ToolBar的空间
+            Rect rect = new Rect(0, 30, position.width, position.height - 30);
+            DrawSettingsArea(rect);
+        }
+        else
+        {
+            // 更新列宽以适应窗口大小
+            UpdateColumnWidths();
 
-        // 绘制TreeView，留出ToolBar的空间
-        Rect rect = new Rect(0, 30, position.width, position.height - 30);
-        m_UIBindToolTreeView.OnGUI(rect);
+            // 绘制TreeView，留出ToolBar的空间
+            Rect rect = new Rect(0, 30, position.width, position.height - 30);
+            m_UIBindToolTreeView.OnGUI(rect);
+        }
     }
 
     /// <summary>
@@ -203,6 +281,34 @@ public class UIBindToolWindow : EditorWindow
     {
         EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
 
+        if (m_IsPreviewMode)
+        {
+            DrawPreviewToolbarContent();
+        }
+        else if (m_IsSettingsMode)
+        {
+            DrawSettingsToolbarContent();
+        }
+        else
+        {
+            DrawMainToolbarContent();
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制主ToolBar内容
+    /// </summary>
+    private void DrawMainToolbarContent()
+    {
+        // 左侧显示UIPanel名称
+        string panelName = GetDisplayPanelName();
+        EditorGUILayout.LabelField(panelName, EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+
+        // 分隔符
+        //GUILayout.Space(10);
+
         // 折叠全部按钮
         if (GUILayout.Button("折叠全部", EditorStyles.toolbarButton))
         {
@@ -221,14 +327,79 @@ public class UIBindToolWindow : EditorWindow
         // 预览按钮
         if (GUILayout.Button("预览", EditorStyles.toolbarButton, GUILayout.Width(50)))
         {
+            TogglePreviewMode();
         }
 
         // 设置按钮（齿轮图标）
         if (GUILayout.Button(EditorGUIUtility.IconContent("Settings"), EditorStyles.toolbarButton, GUILayout.Width(30)))
         {
+            ToggleSettingsMode();
+        }
+    }
+
+    /// <summary>
+    /// 绘制预览模式ToolBar内容
+    /// </summary>
+    private void DrawPreviewToolbarContent()
+    {
+        // 左侧显示文件名
+        EditorGUILayout.LabelField(m_PreviewFileName, EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+
+        // 弹性空间
+        GUILayout.FlexibleSpace();
+
+        // 字体大小调整输入框
+        EditorGUILayout.LabelField("字体大小:", GUILayout.Width(60));
+        string fontSizeText = EditorGUILayout.TextField(m_CodeFontSize.ToString("F0"), GUILayout.Width(40));
+
+        // 尝试解析新的字体大小
+        if (float.TryParse(fontSizeText, out float newFontSize) &&
+            newFontSize >= 8f && newFontSize <= 48f &&
+            Mathf.Abs(newFontSize - m_CodeFontSize) > 0.1f)
+        {
+            m_CodeFontSize = newFontSize;
+            Repaint();
         }
 
-        EditorGUILayout.EndHorizontal();
+        // 弹性空间
+        GUILayout.FlexibleSpace();
+
+        // 生成按钮
+        if (GUILayout.Button("生成", EditorStyles.toolbarButton, GUILayout.Width(50)))
+        {
+            // TODO: 实现代码生成功能
+        }
+
+        // 关闭按钮
+        if (GUILayout.Button("关闭", EditorStyles.toolbarButton, GUILayout.Width(50)))
+        {
+            TogglePreviewMode();
+        }
+    }
+
+    /// <summary>
+    /// 绘制设置模式ToolBar内容
+    /// </summary>
+    private void DrawSettingsToolbarContent()
+    {
+        // 左侧显示"设置"
+        EditorGUILayout.LabelField("设置", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
+
+        // 弹性空间
+        GUILayout.FlexibleSpace();
+
+        // 保存按钮
+        if (GUILayout.Button("保存", EditorStyles.toolbarButton, GUILayout.Width(50)))
+        {
+            // TODO: 实现保存设置功能
+            SaveSettingsData();
+        }
+
+        // 关闭按钮
+        if (GUILayout.Button("关闭", EditorStyles.toolbarButton, GUILayout.Width(50)))
+        {
+            ToggleSettingsMode();
+        }
     }
 
     private void CollapseAll()
@@ -332,6 +503,215 @@ public class UIBindToolWindow : EditorWindow
 
         var headerState = new MultiColumnHeaderState(columns.ToArray());
         return headerState;
+    }
+
+    /// <summary>
+    /// 切换预览模式
+    /// </summary>
+    private void TogglePreviewMode()
+    {
+        m_IsPreviewMode = !m_IsPreviewMode;
+
+        if (m_IsPreviewMode)
+        {
+            // 进入预览模式时，确保退出其他模式
+            m_IsSettingsMode = false;
+
+            // 更新文件名
+            if (CurrentBindings != null && !string.IsNullOrEmpty(CurrentBindings.panelName))
+            {
+                m_PreviewFileName = $"{CurrentBindings.panelName}Binding.cs";
+            }
+            else
+            {
+                m_PreviewFileName = "UIBinding.cs";
+            }
+        }
+
+        Repaint();
+    }
+
+    /// <summary>
+    /// 切换设置模式
+    /// </summary>
+    private void ToggleSettingsMode()
+    {
+        m_IsSettingsMode = !m_IsSettingsMode;
+
+        if (m_IsSettingsMode)
+        {
+            // 进入设置模式时，确保退出其他模式
+            m_IsPreviewMode = false;
+        }
+
+        Repaint();
+    }
+
+    /// <summary>
+    /// 绘制代码预览区域
+    /// </summary>
+    private void DrawCodePreviewArea(Rect previewArea)
+    {
+        // 获取示例代码
+        string sampleCode = GetSampleCode();
+
+        // 创建代码文本样式，使用动态字体大小
+        GUIStyle codeStyle = new(EditorStyles.textArea)
+        {
+            font = EditorStyles.label.font,
+            fontSize = (int)m_CodeFontSize,
+            wordWrap = false,
+            richText = false,
+            alignment = TextAnchor.UpperLeft,
+            padding = new(10, 10, 10, 10),
+            normal = { textColor = new(0.8f, 0.8f, 0.8f, 1f) }
+        };
+
+        // 计算文本区域大小 - 确保宽度与窗口宽度匹配
+        Vector2 textSize = codeStyle.CalcSize(new GUIContent(sampleCode));
+        float contentWidth = Mathf.Max(textSize.x, previewArea.width - 40); // 确保最小宽度，留出滚动条空间
+        float contentHeight = textSize.y;
+
+        // 开始滚动视图，覆盖整个预览区域
+        m_CodeScrollPosition = GUI.BeginScrollView(previewArea, m_CodeScrollPosition,
+            new(0, 0, contentWidth + 20, contentHeight + 20));
+
+        // 绘制代码文本，宽度匹配内容区域
+        Rect textRect = new(10, 10, contentWidth, contentHeight);
+        GUI.Label(textRect, sampleCode, codeStyle);
+
+        // 结束滚动视图
+        GUI.EndScrollView();
+    }
+
+    /// <summary>
+    /// 绘制设置界面
+    /// </summary>
+    private void DrawSettingsArea(Rect settingsArea)
+    {
+        // 绘制背景
+        EditorGUI.DrawRect(settingsArea, new Color(0.2f, 0.2f, 0.2f, 1f));
+
+        // 居中显示设置占位文本
+        GUIStyle labelStyle = new(EditorStyles.centeredGreyMiniLabel)
+        {
+            fontSize = 14,
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleCenter
+        };
+
+        EditorGUI.LabelField(settingsArea, "设置界面占位\n(具体功能待实现)", labelStyle);
+    }
+
+    /// <summary>
+    /// 获取示例代码
+    /// </summary>
+    private string GetSampleCode()
+    {
+        return "using UnityEngine;\n" +
+               "using UnityEngine.UI;\n" +
+               "using TMPro;\n" +
+               "\n" +
+               "namespace UI\n" +
+               "{\n" +
+               "    public partial class LoginPanelBinding : MonoBehaviour\n" +
+               "    {\n" +
+               "        [Header(\"UI Bindings\")]\n" +
+               "        private Button loginButton;\n" +
+               "        private InputField usernameInput;\n" +
+               "        private TextMeshProUGUI errorText;\n" +
+               "        private Toggle rememberMeToggle;\n" +
+               "        private Text welcomeText;\n" +
+               "\n" +
+               "        public void InitializeBindings()\n" +
+               "        {\n" +
+               "            loginButton = transform.Find(\"LoginPanel/LoginButton\").GetComponent<Button>();\n" +
+               "            usernameInput = transform.Find(\"LoginPanel/UsernameInput\").GetComponent<InputField>();\n" +
+               "            errorText = transform.Find(\"LoginPanel/ErrorText\").GetComponent<TextMeshProUGUI>();\n" +
+               "            rememberMeToggle = transform.Find(\"LoginPanel/RememberMeToggle\").GetComponent<Toggle>();\n" +
+               "            welcomeText = transform.Find(\"LoginPanel/WelcomeText\").GetComponent<Text>();\n" +
+               "        }\n" +
+               "\n" +
+               "        // 自动生成的事件绑定方法\n" +
+               "        private void Start()\n" +
+               "        {\n" +
+               "            InitializeBindings();\n" +
+               "            SetupEventListeners();\n" +
+               "        }\n" +
+               "\n" +
+               "        private void SetupEventListeners()\n" +
+               "        {\n" +
+               "            if (loginButton != null)\n" +
+               "            {\n" +
+               "                loginButton.onClick.AddListener(OnLoginButtonClicked);\n" +
+               "            }\n" +
+               "\n" +
+               "            if (rememberMeToggle != null)\n" +
+               "            {\n" +
+               "                rememberMeToggle.onValueChanged.AddListener(OnRememberMeToggled);\n" +
+               "            }\n" +
+               "        }\n" +
+               "\n" +
+               "        // 事件处理方法（需要手动实现具体逻辑）\n" +
+               "        private void OnLoginButtonClicked()\n" +
+               "        {\n" +
+               "            // TODO: 实现登录逻辑\n" +
+               "            Debug.Log(\"Login button clicked\");\n" +
+               "        }\n" +
+               "\n" +
+               "        private void OnRememberMeToggled(bool isOn)\n" +
+               "        {\n" +
+               "            // TODO: 实现记住密码逻辑\n" +
+               "            Debug.Log($\"Remember me toggled: {isOn}\");\n" +
+               "        }\n" +
+               "\n" +
+               "        // UI更新方法\n" +
+               "        public void SetErrorText(string error)\n" +
+               "        {\n" +
+               "            if (errorText != null)\n" +
+               "            {\n" +
+               "                errorText.text = error;\n" +
+               "            }\n" +
+               "        }\n" +
+               "\n" +
+               "        public void SetWelcomeText(string welcome)\n" +
+               "        {\n" +
+               "            if (welcomeText != null)\n" +
+               "            {\n" +
+               "                welcomeText.text = welcome;\n" +
+               "            }\n" +
+               "        }\n" +
+               "\n" +
+               "        public string GetUsername()\n" +
+               "        {\n" +
+               "            return usernameInput != null ? usernameInput.text : \"\";\n" +
+               "        }\n" +
+               "\n" +
+               "        public bool IsRememberMeChecked()\n" +
+               "        {\n" +
+               "            return rememberMeToggle != null && rememberMeToggle.isOn;\n" +
+               "        }\n" +
+               "    }\n" +
+               "}";
+    }
+
+    /// <summary>
+    /// 获取显示的面板名称
+    /// </summary>
+    private string GetDisplayPanelName()
+    {
+        if (CurrentBindings != null && !string.IsNullOrEmpty(CurrentBindings.panelName))
+        {
+            return CurrentBindings.panelName;
+        }
+        else if (bindTarget != null && !string.IsNullOrEmpty(bindTarget.name))
+        {
+            return bindTarget.name;
+        }
+        else
+        {
+            return "未选择面板";
+        }
     }
 }
 

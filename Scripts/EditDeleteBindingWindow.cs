@@ -254,7 +254,6 @@ public class EditDeleteBindingWindow : EditorWindow
         {
             // 保存绑定数据
             UIBindDataManager.SaveBindings(bindings);
-            EditorUtility.DisplayDialog("Success", "Binding deleted successfully!", "OK");
         }
         else
         {
