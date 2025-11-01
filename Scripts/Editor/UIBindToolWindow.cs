@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using TMPro;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class UIBindToolWindow : EditorWindow
 {
@@ -15,14 +13,6 @@ public class UIBindToolWindow : EditorWindow
     private List<KeyValuePair<int, (GameObject obj,GameObject objPrefab)>> bindableObjects = new List<KeyValuePair<int, (GameObject,GameObject)>>();
 
     public GameObject BindTargetPrefab => bindTargetPrefab;
-
-    // 可配置的组件类型列表，只有在这个列表中的组件才会被收集
-    public static List<Type> allowedComponentTypes = new List<Type>
-    {
-        typeof(Button),typeof(Image),typeof(Text),typeof(Toggle),
-        typeof(Scrollbar),typeof(Slider),typeof(InputField),typeof(Canvas),
-        typeof(CanvasGroup),typeof(ScrollRect),typeof(TMP_Text)
-    };
 
     [SerializeField]
     private TreeViewState m_TreeViewState;
@@ -55,6 +45,13 @@ public class UIBindToolWindow : EditorWindow
             if (m_CurrentBindings != value)
             {
                 m_CurrentBindings = value;
+
+                // 如果在预览模式，更新预览文件名
+                if (m_IsPreviewMode)
+                {
+                    m_PreviewFileName = GetPreviewFileName();
+                }
+
                 Repaint();
             }
         }
@@ -398,7 +395,16 @@ public class UIBindToolWindow : EditorWindow
         // 生成按钮
         if (GUILayout.Button("生成", EditorStyles.toolbarButton, GUILayout.Width(50)))
         {
-            // TODO: 实现代码生成功能
+            GenerateScripts();
+        }
+
+        // 分隔符
+        GUILayout.Space(5);
+
+        // 复制按钮
+        if (GUILayout.Button(EditorGUIUtility.IconContent("Clipboard"), EditorStyles.toolbarButton, GUILayout.Width(30)))
+        {
+            CopyCodeToClipboard();
         }
 
         // 关闭按钮
@@ -551,14 +557,7 @@ public class UIBindToolWindow : EditorWindow
             m_IsSettingsMode = false;
 
             // 更新文件名
-            if (CurrentBindings != null && !string.IsNullOrEmpty(CurrentBindings.panelName))
-            {
-                m_PreviewFileName = $"{CurrentBindings.panelName}Binding.cs";
-            }
-            else
-            {
-                m_PreviewFileName = "UIBinding.cs";
-            }
+            m_PreviewFileName = GetPreviewFileName();
         }
 
         Repaint();
@@ -611,10 +610,37 @@ public class UIBindToolWindow : EditorWindow
 
         // 绘制代码文本，宽度匹配内容区域
         Rect textRect = new(10, 10, contentWidth, contentHeight);
-        GUI.Label(textRect, sampleCode, codeStyle);
+
+        // 使用TextField替代Label，设置为只读但可选择复制
+        string tempCode = sampleCode; // 临时变量用于TextField
+        GUI.SetNextControlName("CodePreviewTextField");
+        GUI.TextField(textRect, tempCode, codeStyle);
 
         // 结束滚动视图
         GUI.EndScrollView();
+
+        // 如果代码预览文本框获得焦点且用户按Ctrl+C，则复制到剪贴板
+        if (GUI.GetNameOfFocusedControl() == "CodePreviewTextField")
+        {
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.C && Event.current.control)
+            {
+                // 复制代码到剪贴板
+                EditorGUIUtility.systemCopyBuffer = sampleCode;
+                Event.current.Use(); // 阻止默认行为
+
+                // 显示复制成功的提示
+                ShowNotification("代码已复制到剪贴板");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 显示通知
+    /// </summary>
+    private void ShowNotification(string message)
+    {
+        // 使用Unity编辑器的通知系统
+        this.ShowNotification(new GUIContent(message), 3f);
     }
 
     /// <summary>
@@ -655,9 +681,6 @@ public class UIBindToolWindow : EditorWindow
         DrawGenerateUIBindScriptFolder(currentSettings);
         EditorGUILayout.Space(10);
 
-        DrawGenerateUILogicScriptFolder(currentSettings);
-        EditorGUILayout.Space(10);
-
         DrawScriptCombinedMethod(currentSettings);
         EditorGUILayout.Space(10);
 
@@ -667,9 +690,6 @@ public class UIBindToolWindow : EditorWindow
         DrawNamespaceSettings(currentSettings);
         EditorGUILayout.Space(10);
 
-        DrawAutoAttachScripts(currentSettings);
-        EditorGUILayout.Space(10);
-
         DrawAutoOpenGeneratedScripts(currentSettings);
 
         EditorGUILayout.EndScrollView();
@@ -677,95 +697,76 @@ public class UIBindToolWindow : EditorWindow
     }
 
     /// <summary>
-    /// 获取示例代码
+    /// 生成UI绑定脚本
+    /// </summary>
+    private void GenerateScripts()
+    {
+        if (CurrentBindings == null)
+        {
+            EditorUtility.DisplayDialog("错误", "未选择面板或没有绑定数据", "确定");
+            return;
+        }
+
+        if (CurrentBindings.GetEnabledBindingsCount() == 0)
+        {
+            EditorUtility.DisplayDialog("错误", "没有启用的绑定项，请先添加UI组件绑定", "确定");
+            return;
+        }
+
+        var result = UIBindScriptGenerator.GenerateScripts(CurrentBindings);
+
+        if (!result.success)
+        {
+            EditorUtility.DisplayDialog("生成失败", result.errorMessage, "确定");
+        }
+        else
+        {
+            // 更新TreeView显示
+            m_UIBindToolTreeView?.Reload();
+
+            // 检查是否需要自动打开生成的脚本
+            var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
+            if (currentSettings != null && currentSettings.autoOpenGeneratedScripts)
+            {
+                string filePath = result.bindingScriptPath;
+                if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                {
+                    // 打开生成的脚本文件
+                    UnityEditor.EditorUtility.OpenWithDefaultApp(filePath);
+                    Debug.Log($"已自动打开生成的脚本: {filePath}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取预览代码
     /// </summary>
     private string GetSampleCode()
     {
-        return "using UnityEngine;\n" +
-               "using UnityEngine.UI;\n" +
-               "using TMPro;\n" +
-               "\n" +
-               "namespace UI\n" +
-               "{\n" +
-               "    public partial class LoginPanelBinding : MonoBehaviour\n" +
-               "    {\n" +
-               "        [Header(\"UI Bindings\")]\n" +
-               "        private Button loginButton;\n" +
-               "        private InputField usernameInput;\n" +
-               "        private TextMeshProUGUI errorText;\n" +
-               "        private Toggle rememberMeToggle;\n" +
-               "        private Text welcomeText;\n" +
-               "\n" +
-               "        public void InitializeBindings()\n" +
-               "        {\n" +
-               "            loginButton = transform.Find(\"LoginPanel/LoginButton\").GetComponent<Button>();\n" +
-               "            usernameInput = transform.Find(\"LoginPanel/UsernameInput\").GetComponent<InputField>();\n" +
-               "            errorText = transform.Find(\"LoginPanel/ErrorText\").GetComponent<TextMeshProUGUI>();\n" +
-               "            rememberMeToggle = transform.Find(\"LoginPanel/RememberMeToggle\").GetComponent<Toggle>();\n" +
-               "            welcomeText = transform.Find(\"LoginPanel/WelcomeText\").GetComponent<Text>();\n" +
-               "        }\n" +
-               "\n" +
-               "        // 自动生成的事件绑定方法\n" +
-               "        private void Start()\n" +
-               "        {\n" +
-               "            InitializeBindings();\n" +
-               "            SetupEventListeners();\n" +
-               "        }\n" +
-               "\n" +
-               "        private void SetupEventListeners()\n" +
-               "        {\n" +
-               "            if (loginButton != null)\n" +
-               "            {\n" +
-               "                loginButton.onClick.AddListener(OnLoginButtonClicked);\n" +
-               "            }\n" +
-               "\n" +
-               "            if (rememberMeToggle != null)\n" +
-               "            {\n" +
-               "                rememberMeToggle.onValueChanged.AddListener(OnRememberMeToggled);\n" +
-               "            }\n" +
-               "        }\n" +
-               "\n" +
-               "        // 事件处理方法（需要手动实现具体逻辑）\n" +
-               "        private void OnLoginButtonClicked()\n" +
-               "        {\n" +
-               "            // TODO: 实现登录逻辑\n" +
-               "            Debug.Log(\"Login button clicked\");\n" +
-               "        }\n" +
-               "\n" +
-               "        private void OnRememberMeToggled(bool isOn)\n" +
-               "        {\n" +
-               "            // TODO: 实现记住密码逻辑\n" +
-               "            Debug.Log($\"Remember me toggled: {isOn}\");\n" +
-               "        }\n" +
-               "\n" +
-               "        // UI更新方法\n" +
-               "        public void SetErrorText(string error)\n" +
-               "        {\n" +
-               "            if (errorText != null)\n" +
-               "            {\n" +
-               "                errorText.text = error;\n" +
-               "            }\n" +
-               "        }\n" +
-               "\n" +
-               "        public void SetWelcomeText(string welcome)\n" +
-               "        {\n" +
-               "            if (welcomeText != null)\n" +
-               "            {\n" +
-               "                welcomeText.text = welcome;\n" +
-               "            }\n" +
-               "        }\n" +
-               "\n" +
-               "        public string GetUsername()\n" +
-               "        {\n" +
-               "            return usernameInput != null ? usernameInput.text : \"\";\n" +
-               "        }\n" +
-               "\n" +
-               "        public bool IsRememberMeChecked()\n" +
-               "        {\n" +
-               "            return rememberMeToggle != null && rememberMeToggle.isOn;\n" +
-               "        }\n" +
-               "    }\n" +
-               "}";
+        if (CurrentBindings == null || CurrentBindings.GetEnabledBindingsCount() == 0)
+        {
+            return "// 未选择面板或没有绑定数据\n// 请先在主界面中添加UI组件绑定";
+        }
+
+        try
+        {
+            var config = UIBindScriptGenerator.LoadGenerationConfig();
+
+            if (config == null)
+            {
+                return "// 无法加载生成配置\n// 请检查设置配置";
+            }
+
+            // 生成绑定代码预览
+            string fullCode = UIBindScriptGenerator.GenerateBindingCode(CurrentBindings, config);
+
+            return fullCode;
+        }
+        catch (Exception e)
+        {
+            return $"// 生成预览代码时发生错误: {e.Message}\n// 请检查配置和绑定数据";
+        }
     }
 
     /// <summary>
@@ -905,6 +906,12 @@ public class UIBindToolWindow : EditorWindow
             if (GUILayout.Button(displayName))
             {
                 settings.scriptCombinedMethod = method;
+
+                // 如果在预览模式，更新预览文件名
+                if (m_IsPreviewMode)
+                {
+                    m_PreviewFileName = GetPreviewFileName();
+                }
             }
 
             // 恢复颜色
@@ -1019,18 +1026,6 @@ public class UIBindToolWindow : EditorWindow
         EditorGUI.EndDisabledGroup();
 
         EditorGUILayout.EndHorizontal();
-    }
-
-    /// <summary>
-    /// 绘制自动关联脚本设置
-    /// </summary>
-    private void DrawAutoAttachScripts(UIBindToolSettingsDataItem settings)
-    {
-        bool newValue = EditorGUILayout.Toggle("自动关联脚本到UI对象", settings.autoAttachScripts);
-        if (newValue != settings.autoAttachScripts)
-        {
-            settings.autoAttachScripts = newValue;
-        }
     }
 
     /// <summary>
@@ -1183,6 +1178,74 @@ public class UIBindToolWindow : EditorWindow
     }
 
     /// <summary>
+    /// 复制代码到剪贴板
+    /// </summary>
+    private void CopyCodeToClipboard()
+    {
+        try
+        {
+            string sampleCode = GetSampleCode();
+
+            if (!string.IsNullOrEmpty(sampleCode))
+            {
+                // 将代码复制到系统剪贴板
+                EditorGUIUtility.systemCopyBuffer = sampleCode;
+                ShowNotification("代码已复制到剪贴板");
+            }
+            else
+            {
+                ShowNotification("没有可复制的代码");
+            }
+        }
+        catch (System.Exception e)
+        {
+            ShowNotification($"复制失败: {e.Message}");
+            Debug.LogError($"复制代码到剪贴板失败: {e}");
+        }
+    }
+
+    /// <summary>
+    /// 获取预览文件名
+    /// </summary>
+    private string GetPreviewFileName()
+    {
+        if (CurrentBindings == null || string.IsNullOrEmpty(CurrentBindings.panelName))
+        {
+            return "UIBinding.cs";
+        }
+
+        // 获取当前设置
+        var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
+        if (currentSettings == null)
+        {
+            return $"{CurrentBindings.panelName}.cs";
+        }
+
+        // 清理Panel名称，移除空格和特殊字符
+        string className = CurrentBindings.panelName;
+        className = System.Text.RegularExpressions.Regex.Replace(className, @"[^a-zA-Z0-9_]", "");
+
+        // 确保首字母大写
+        if (className.Length > 0)
+        {
+            className = char.ToUpper(className[0]) + className[1..];
+        }
+
+        // 根据模式返回不同的文件名
+        switch (currentSettings.scriptCombinedMethod)
+        {
+            case ScriptCombinedMethod.BaseClassInherit:
+                return $"{className}Base.cs";
+            case ScriptCombinedMethod.PartialClass:
+                return $"{className}.Bind.cs";
+            case ScriptCombinedMethod.SingleScript:
+                return $"{className}.cs";
+            default:
+                return $"{className}.cs";
+        }
+    }
+
+    /// <summary>
     /// 获取脚本结合方式的显示名称
     /// </summary>
     private string GetScriptCombinedMethodDisplayName(ScriptCombinedMethod method)
@@ -1191,7 +1254,7 @@ public class UIBindToolWindow : EditorWindow
         {
             ScriptCombinedMethod.BaseClassInherit => "基类继承",
             ScriptCombinedMethod.PartialClass => "部分类",
-            ScriptCombinedMethod.CompositeReference => "组合引用",
+            ScriptCombinedMethod.SingleScript => "单脚本",
             _ => method.ToString()
         };
     }

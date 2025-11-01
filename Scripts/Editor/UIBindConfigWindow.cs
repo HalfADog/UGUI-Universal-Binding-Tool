@@ -90,8 +90,95 @@ public class UIBindConfigWindow : EditorWindow
         {
             string componentTypeName = selectedComponentType.Name;
             string objectName = targetObject.name;
-            variableName = $"{componentTypeName.ToLower()}{objectName}";
+
+            // 生成安全的变量名
+            variableName = GenerateSafeVariableName(componentTypeName, objectName);
         }
+    }
+
+    /// <summary>
+    /// 生成安全的变量名（移除空格和非法字符）
+    /// </summary>
+    /// <param name="componentTypeName">组件类型名</param>
+    /// <param name="objectName">对象名</param>
+    /// <returns>安全的变量名</returns>
+    private string GenerateSafeVariableName(string componentTypeName, string objectName)
+    {
+        if (string.IsNullOrEmpty(componentTypeName))
+            componentTypeName = "Component";
+        if (string.IsNullOrEmpty(objectName))
+            objectName = "Object";
+
+        // 直接删除空格
+        string cleanComponentName = componentTypeName.Replace(" ", "");
+        string cleanObjectName = objectName.Replace(" ", "");
+
+        // 移除其他非法字符，只保留字母、数字和下划线
+        var validComponentChars = new System.Text.StringBuilder();
+        var validObjectChars = new System.Text.StringBuilder();
+
+        foreach (char c in cleanComponentName)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+                validComponentChars.Append(c);
+        }
+
+        foreach (char c in cleanObjectName)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+                validObjectChars.Append(c);
+        }
+
+        cleanComponentName = validComponentChars.ToString();
+        cleanObjectName = validObjectChars.ToString();
+
+        // 如果结果为空或以数字开头，添加前缀
+        if (string.IsNullOrEmpty(cleanComponentName) || (cleanComponentName.Length > 0 && char.IsDigit(cleanComponentName[0])))
+        {
+            cleanComponentName = "comp_" + cleanComponentName;
+        }
+
+        if (string.IsNullOrEmpty(cleanObjectName) || (cleanObjectName.Length > 0 && char.IsDigit(cleanObjectName[0])))
+        {
+            cleanObjectName = "obj_" + cleanObjectName;
+        }
+
+        // 确保不为空
+        if (string.IsNullOrEmpty(cleanComponentName))
+            cleanComponentName = "component";
+        if (string.IsNullOrEmpty(cleanObjectName))
+            cleanObjectName = "object";
+
+        // 将组件名转为小写开头
+        if (cleanComponentName.Length > 0)
+        {
+            cleanComponentName = char.ToLower(cleanComponentName[0]) + cleanComponentName[1..];
+        }
+
+        // 确保对象名首字母大写（驼峰命名）
+        if (cleanObjectName.Length > 0)
+        {
+            cleanObjectName = char.ToUpper(cleanObjectName[0]) + cleanObjectName[1..];
+        }
+
+        // 组合变量名，避免重复
+        string variableName;
+        if (cleanComponentName.Equals(cleanObjectName, StringComparison.OrdinalIgnoreCase))
+        {
+            // 如果组件名和对象名相同，只使用一个（例如：buttonButton -> button）
+            variableName = cleanComponentName;
+        }
+        else if (cleanObjectName.StartsWith(cleanComponentName, StringComparison.OrdinalIgnoreCase))
+        {
+            // 如果对象名以组件名开头，只使用对象名（例如：buttonTestButton -> testButton）
+            variableName = cleanObjectName;
+        }
+        else
+        {
+            // 否则组合两个名称
+            variableName = cleanComponentName + cleanObjectName;
+        }
+        return variableName;
     }
 
     void OnGUI()
@@ -304,7 +391,7 @@ public class UIBindConfigWindow : EditorWindow
         string newVariableName = EditorGUILayout.TextField(variableName);
         if (newVariableName != variableName)
         {
-            variableName = newVariableName;
+            variableName = newVariableName.Trim();
         }
 
         EditorGUILayout.EndHorizontal();
@@ -379,7 +466,7 @@ public class UIBindConfigWindow : EditorWindow
             }
 
             // 创建新的绑定项
-            UIBindItem newBinding = new(targetObject,targetObjectInPrefab, selectedComponentType, selectedAccessModifier, variableName);
+            UIBindItem newBinding = new UIBindItem(targetObject,targetObjectInPrefab,rootPanel,selectedComponentType, selectedAccessModifier, variableName);
 
             // 添加到绑定数据中
             bindings.AddBinding(newBinding);

@@ -60,8 +60,6 @@ public class UIBindToolSettingsDataItem
     public bool useNamespace = false;
     // 脚本命名空间
     public string scriptNamespace = "";
-    // 是否自动关联生成的脚本到UI面板对象
-    public bool autoAttachScripts = true;
     // 生成脚本后是否自动打开
     public bool autoOpenGeneratedScripts = false;
 }
@@ -73,5 +71,5 @@ public enum ScriptCombinedMethod
 {
     BaseClassInherit,//基类继承
     PartialClass,//部分类
-    CompositeReference //组合引用
+    SingleScript //单脚本  
 }

@@ -151,7 +151,7 @@ public class EditDeleteBindingWindow : EditorWindow
         string newVariableName = EditorGUILayout.TextField(m_variableName);
         if (newVariableName != m_variableName)
         {
-            m_variableName = newVariableName;
+            m_variableName = newVariableName.Trim();
         }
 
         EditorGUILayout.EndHorizontal();
