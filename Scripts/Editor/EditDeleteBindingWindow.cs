@@ -12,7 +12,7 @@ public class EditDeleteBindingWindow : EditorWindow
     // 界面字段
     private string m_variableName;
     private AccessModifier m_accessModifier;
-    private bool m_isEnabled;
+    //private bool m_isEnabled;
 
     /// <summary>
     /// 显示修改/删除绑定窗口
@@ -42,7 +42,7 @@ public class EditDeleteBindingWindow : EditorWindow
 
         m_variableName = m_originalBinding.variableName;
         m_accessModifier = m_originalBinding.accessModifier;
-        m_isEnabled = m_originalBinding.isEnabled;
+        //m_isEnabled = m_originalBinding.isEnabled;
     }
 
     void OnGUI()
@@ -157,7 +157,7 @@ public class EditDeleteBindingWindow : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         // 启用状态
-        m_isEnabled = EditorGUILayout.Toggle("启用", m_isEnabled);
+        //m_isEnabled = EditorGUILayout.Toggle("启用", m_isEnabled);
     }
 
     // 第四层：操作按钮
@@ -215,7 +215,7 @@ public class EditDeleteBindingWindow : EditorWindow
         // 直接更新原始绑定信息
         m_originalBinding.variableName = m_variableName;
         m_originalBinding.accessModifier = m_accessModifier;
-        m_originalBinding.isEnabled = m_isEnabled;
+        //m_originalBinding.isEnabled = m_isEnabled;
 
         // 保存绑定数据
         UIBindDataManager.SaveBindings(bindings);

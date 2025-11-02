@@ -113,7 +113,7 @@ public class UIBindToolTreeView : TreeView
             return;
 
         // 过滤出有效的绑定
-        var validBindings = objectBindings.FindAll(b => b.isEnabled && b.IsValidTarget());
+        var validBindings = objectBindings.FindAll(b => b.IsValidTarget());
         if (validBindings.Count == 0)
         {
             // 显示空状态提示

@@ -707,7 +707,7 @@ public class UIBindToolWindow : EditorWindow
             return;
         }
 
-        if (CurrentBindings.GetEnabledBindingsCount() == 0)
+        if (CurrentBindings.bindings.Count == 0)
         {
             EditorUtility.DisplayDialog("错误", "没有启用的绑定项，请先添加UI组件绑定", "确定");
             return;
@@ -744,7 +744,7 @@ public class UIBindToolWindow : EditorWindow
     /// </summary>
     private string GetSampleCode()
     {
-        if (CurrentBindings == null || CurrentBindings.GetEnabledBindingsCount() == 0)
+        if (CurrentBindings == null || CurrentBindings.bindings.Count == 0)
         {
             return "// 未选择面板或没有绑定数据\n// 请先在主界面中添加UI组件绑定";
         }

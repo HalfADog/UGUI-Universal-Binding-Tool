@@ -385,7 +385,6 @@ public static class UIBindScriptGenerator
         // 事件处理方法
         string handlerCode = GenerateEventHandlers(bindings);
         code.AppendLine(AddIndentToMultiLine(handlerCode, hasNamespace ? 1 : 0));
-
         code.AppendLine($"{classIndent}}}");
 
         // 结束命名空间
@@ -411,7 +410,7 @@ public static class UIBindScriptGenerator
     {
         var code = new System.Text.StringBuilder();
 
-        foreach (var binding in bindings.GetEnabledBindings())
+        foreach (var binding in bindings.bindings)
         {
             string accessModifier = binding.accessModifier.ToString().ToLower();
             if (string.IsNullOrEmpty(accessModifier))
@@ -433,7 +432,7 @@ public static class UIBindScriptGenerator
     {
         var code = new System.Text.StringBuilder();
 
-        foreach (var binding in bindings.GetEnabledBindings())
+        foreach (var binding in bindings.bindings)
         {
             // 优先使用相对路径，如果没有相对路径则使用绝对路径并转换
             string path = "";
@@ -505,7 +504,7 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         var generatedHandlers = new HashSet<string>();
 
-        foreach (var binding in bindings.GetEnabledBindings())
+        foreach (var binding in bindings.bindings)
         {
             string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
             if (generatedHandlers.Contains(methodName))
@@ -566,7 +565,7 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         var generatedHandlers = new HashSet<string>();
 
-        foreach (var binding in bindings.GetEnabledBindings())
+        foreach (var binding in bindings.bindings)
         {
             string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
 
@@ -584,6 +583,7 @@ public static class UIBindScriptGenerator
                     code.AppendLine($"        // TODO: 处理 {binding.variableName} 点击事件");
                     code.AppendLine($"        Debug.Log(\"{binding.variableName} clicked\");");
                     code.AppendLine("    }");
+                    code.AppendLine();
                     break;
 
                 case "Toggle":
@@ -592,6 +592,7 @@ public static class UIBindScriptGenerator
                     code.AppendLine($"        // TODO: 处理 {binding.variableName} 切换事件");
                     code.AppendLine($"        Debug.Log($\"{binding.variableName} toggled: {{isOn}}\");");
                     code.AppendLine("    }");
+                    code.AppendLine();
                     break;
 
                 case "InputField":
@@ -600,6 +601,7 @@ public static class UIBindScriptGenerator
                     code.AppendLine($"        // TODO: 处理 {binding.variableName} 输入结束事件");
                     code.AppendLine($"        Debug.Log($\"{binding.variableName} input ended: {{text}}\");");
                     code.AppendLine("    }");
+                    code.AppendLine();
                     break;
 
                 case "Slider":
@@ -609,6 +611,7 @@ public static class UIBindScriptGenerator
                     code.AppendLine($"        // TODO: 处理 {binding.variableName} 数值变化事件");
                     code.AppendLine($"        Debug.Log($\"{binding.variableName} value changed: {{value}}\");");
                     code.AppendLine("    }");
+                    code.AppendLine();
                     break;
 
                 case "Dropdown":
@@ -617,10 +620,10 @@ public static class UIBindScriptGenerator
                     code.AppendLine($"        // TODO: 处理 {binding.variableName} 选择变化事件");
                     code.AppendLine($"        Debug.Log($\"{binding.variableName} option changed: {{index}}\");");
                     code.AppendLine("    }");
+                    code.AppendLine();
                     break;
             }
-
-            code.AppendLine();
+            //code.AppendLine();
         }
 
         return code.ToString();

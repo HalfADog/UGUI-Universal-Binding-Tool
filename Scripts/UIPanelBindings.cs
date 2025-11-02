@@ -127,30 +127,6 @@ public class UIPanelBindings : ScriptableObject
     }
 
     /// <summary>
-    /// 获取所有启用的绑定项
-    /// </summary>
-    public List<UIBindItem> GetEnabledBindings()
-    {
-        return bindings.FindAll(b => b.isEnabled);
-    }
-
-    /// <summary>
-    /// 获取绑定总数
-    /// </summary>
-    public int GetTotalBindings()
-    {
-        return bindings.Count;
-    }
-
-    /// <summary>
-    /// 获取启用的绑定数量
-    /// </summary>
-    public int GetEnabledBindingsCount()
-    {
-        return bindings.FindAll(b => b.isEnabled).Count;
-    }
-
-    /// <summary>
     /// 初始化数据
     /// </summary>
     public void Initialize(GameObject panel)
