@@ -50,10 +50,8 @@ public class UIBindConfigWindow : EditorWindow
 
         foreach (var component in allComponents)
         {
-            if (component != null && component.GetType() != typeof(Transform))
+            if (component != null)
             {
-                // 如果启用了组件过滤，只添加允许的组件类型
-                // if (UIBindToolWindow.allowedComponentTypes.Contains(component.GetType()))
                 availableComponentTypes.Add(component.GetType());
             }
         }
@@ -131,17 +129,6 @@ public class UIBindConfigWindow : EditorWindow
 
         cleanComponentName = validComponentChars.ToString();
         cleanObjectName = validObjectChars.ToString();
-
-        // 如果结果为空或以数字开头，添加前缀
-        if (string.IsNullOrEmpty(cleanComponentName) || (cleanComponentName.Length > 0 && char.IsDigit(cleanComponentName[0])))
-        {
-            cleanComponentName = "comp_" + cleanComponentName;
-        }
-
-        if (string.IsNullOrEmpty(cleanObjectName) || (cleanObjectName.Length > 0 && char.IsDigit(cleanObjectName[0])))
-        {
-            cleanObjectName = "obj_" + cleanObjectName;
-        }
 
         // 确保不为空
         if (string.IsNullOrEmpty(cleanComponentName))
@@ -309,11 +296,9 @@ public class UIBindConfigWindow : EditorWindow
 
         // 获取绑定数据
         UIPanelBindings bindings = m_parentWindow.CurrentBindings;//UIBindDataManager.LoadBindingsForPanel(rootPanel);
-        if (bindings == null)
-            return boundTypes;
 
         // 获取当前对象的所有绑定（包括禁用的）
-        List<UIBindItem> objectBindings = bindings.GetBindingsForObject(targetObject);
+        List<UIBindItem> objectBindings = bindings?.GetBindingsForObject(targetObject) ?? null;
         if (objectBindings == null)
             return boundTypes;
 
@@ -321,28 +306,9 @@ public class UIBindConfigWindow : EditorWindow
         foreach (var binding in objectBindings)
         {
             Type componentType = binding.GetComponentType();
-            if (componentType != null)
+            if (componentType != null && !boundTypes.Contains(componentType))
             {
-                // 检查目标对象是否仍然有效
-                var boundObject = binding.GetTargetObject();
-                if (boundObject == targetObject)
-                {
-                    // 使用FullName进行匹配，而不是Type对象比较
-                    Type matchingType = null;
-                    foreach (var availableType in availableComponentTypes)
-                    {
-                        if (availableType.FullName == componentType.FullName)
-                        {
-                            matchingType = availableType;
-                            break;
-                        }
-                    }
-
-                    if (matchingType != null && !boundTypes.Contains(matchingType))
-                    {
-                        boundTypes.Add(matchingType);
-                    }
-                }
+                boundTypes.Add(componentType);
             }
         }
 
@@ -473,8 +439,6 @@ public class UIBindConfigWindow : EditorWindow
 
             // 保存数据
             UIBindDataManager.SaveBindings(bindings);
-
-            // Debug.Log($"成功添加绑定: {selectedAccessModifier} {selectedComponentType.Name} {variableName} 对象: {targetObject.name} 面板: {rootPanel.name}");
 
             // 关闭窗口
             Close();

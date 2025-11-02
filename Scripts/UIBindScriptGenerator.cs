@@ -492,7 +492,6 @@ public static class UIBindScriptGenerator
                 code.AppendLine($"        }}");
             }
         }
-
         return code.ToString();
     }
 

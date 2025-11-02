@@ -49,7 +49,10 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public int RemoveBindingsForObject(GameObject targetObject)
     {
-        int count = bindings.RemoveAll(b => b.GetTargetObject() == targetObject);
+        if (targetObject == null)
+            return 0;
+
+        int count = bindings.RemoveAll(b => b != null && b.GetTargetObject() == targetObject);
         if (count > 0)
         {
             lastModifiedTime = DateTime.Now;
@@ -62,7 +65,10 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public List<UIBindItem> GetBindingsForObject(GameObject targetObject)
     {
-        return bindings.FindAll(b => b.GetTargetObject() == targetObject);
+        if (targetObject == null)
+            return new List<UIBindItem>();
+
+        return bindings.FindAll(b => b != null && b.GetTargetObject() == targetObject);
     }
 
     /// <summary>
@@ -70,7 +76,17 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public UIBindItem GetBindingForObjectAndComponent(GameObject targetObject, Type componentType)
     {
-        return bindings.Find(b => b.GetTargetObject() == targetObject && b.componentTypeName == componentType.FullName);
+        if (targetObject == null || componentType == null)
+            return null;
+
+        string componentTypeName = componentType.FullName;
+        if (string.IsNullOrEmpty(componentTypeName))
+            return null;
+
+        return bindings.Find(b =>
+            b != null &&
+            b.GetTargetObject() == targetObject &&
+            b.componentTypeName == componentTypeName);
     }
 
     /// <summary>
@@ -78,7 +94,11 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public void UpdateBinding(UIBindItem binding)
     {
+        if (binding == null)
+            return;
+
         int index = bindings.FindIndex(b =>
+            b != null &&
             b.GetTargetObject() == binding.GetTargetObject() &&
             b.componentTypeName == binding.componentTypeName);
         if (index >= 0)
@@ -93,7 +113,17 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public bool HasBinding(GameObject targetObject, Type componentType)
     {
-        return bindings.Exists(b => b.GetTargetObject() == targetObject && b.componentTypeName == componentType.FullName);
+        if (targetObject == null || componentType == null)
+            return false;
+
+        string componentTypeName = componentType.FullName;
+        if (string.IsNullOrEmpty(componentTypeName))
+            return false;
+
+        return bindings.Exists(b =>
+            b != null &&
+            b.GetTargetObject() == targetObject &&
+            b.componentTypeName == componentTypeName);
     }
 
     /// <summary>

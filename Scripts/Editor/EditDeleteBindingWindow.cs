@@ -205,23 +205,22 @@ public class EditDeleteBindingWindow : EditorWindow
             return;
         }
 
-        // 查找原始绑定
-        var existingBinding = bindings.GetBindingForObjectAndComponent(m_targetObject, m_originalBinding.GetComponentType());
-        if (existingBinding == null)
+        // 验证原始绑定和目标对象
+        if (m_originalBinding == null)
         {
-            EditorUtility.DisplayDialog("Error", "Original binding not found!", "OK");
+            EditorUtility.DisplayDialog("Error", "Original binding is null!", "OK");
             return;
         }
 
-        // 更新绑定信息
-        existingBinding.variableName = m_variableName;
-        existingBinding.accessModifier = m_accessModifier;
-        existingBinding.isEnabled = m_isEnabled;
+        // 直接更新原始绑定信息
+        m_originalBinding.variableName = m_variableName;
+        m_originalBinding.accessModifier = m_accessModifier;
+        m_originalBinding.isEnabled = m_isEnabled;
 
         // 保存绑定数据
         UIBindDataManager.SaveBindings(bindings);
 
-        EditorUtility.DisplayDialog("Success", "Binding updated successfully!", "OK");
+        //EditorUtility.DisplayDialog("Success", "Binding updated successfully!", "OK");
         Close();
     }
 

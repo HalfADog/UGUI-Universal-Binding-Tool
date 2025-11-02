@@ -215,7 +215,12 @@ public class UIBindDataManager
         return $"{GetBindDataFolder()}/{safeFileName}{BIND_DATA_EXTENSION}";
     }
 
-    public static void UpdateBindingInstanceData(UIPanelBindings bindings,GameObject panelInstance)
+    /// <summary>
+    /// 根据当前的实例更新绑定数据中记录的实例相关信息
+    /// </summary>
+    /// <param name="bindings"></param>
+    /// <param name="panelInstance"></param>
+    public static void UpdateBindingInstanceData(UIPanelBindings bindings, GameObject panelInstance)
     {
         if (bindings == null || panelInstance == null)
             return;
@@ -245,7 +250,7 @@ public class UIBindDataManager
         {
             string path = prefabObjectData[bindItem.targetObjectFileID];
             bindItem.targetObjectFullPathInScene = bindings.panelPathInScene;
-            if(bindItem.targetObjectFileID != rootFileID)
+            if (bindItem.targetObjectFileID != rootFileID)
                 bindItem.targetObjectFullPathInScene += (string.IsNullOrEmpty(path) ? "" : "/" + path);
             bindItem.targetObjectName = path.Substring(path.LastIndexOf('/') + 1);
             bindItem.targetInstanceID = GameObject.Find(bindItem.targetObjectFullPathInScene)?.GetInstanceID() ?? 0;
