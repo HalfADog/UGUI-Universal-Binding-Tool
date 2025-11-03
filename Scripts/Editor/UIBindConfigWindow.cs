@@ -90,7 +90,10 @@ public class UIBindConfigWindow : EditorWindow
             string objectName = targetObject.name;
 
             // 生成安全的变量名
-            variableName = GenerateSafeVariableName(componentTypeName, objectName);
+            string baseVariableName = GenerateSafeVariableName(componentTypeName, objectName);
+
+            // 检查并生成唯一的变量名
+            variableName = GenerateUniqueVariableName(baseVariableName, targetObject);
         }
     }
 
@@ -107,19 +110,12 @@ public class UIBindConfigWindow : EditorWindow
         if (string.IsNullOrEmpty(objectName))
             objectName = "Object";
 
-        // 直接删除空格
-        string cleanComponentName = componentTypeName.Replace(" ", "");
+        // 获取组件前缀配置
+        string componentPrefix = GetComponentPrefix(componentTypeName);
+
+        // 清理对象名称（移除空格和非法字符）
         string cleanObjectName = objectName.Replace(" ", "");
-
-        // 移除其他非法字符，只保留字母、数字和下划线
-        var validComponentChars = new System.Text.StringBuilder();
         var validObjectChars = new System.Text.StringBuilder();
-
-        foreach (char c in cleanComponentName)
-        {
-            if (char.IsLetterOrDigit(c) || c == '_')
-                validComponentChars.Append(c);
-        }
 
         foreach (char c in cleanObjectName)
         {
@@ -127,20 +123,11 @@ public class UIBindConfigWindow : EditorWindow
                 validObjectChars.Append(c);
         }
 
-        cleanComponentName = validComponentChars.ToString();
         cleanObjectName = validObjectChars.ToString();
 
-        // 确保不为空
-        if (string.IsNullOrEmpty(cleanComponentName))
-            cleanComponentName = "component";
+        // 确保对象名不为空
         if (string.IsNullOrEmpty(cleanObjectName))
             cleanObjectName = "object";
-
-        // 将组件名转为小写开头
-        if (cleanComponentName.Length > 0)
-        {
-            cleanComponentName = char.ToLower(cleanComponentName[0]) + cleanComponentName[1..];
-        }
 
         // 确保对象名首字母大写（驼峰命名）
         if (cleanObjectName.Length > 0)
@@ -148,24 +135,44 @@ public class UIBindConfigWindow : EditorWindow
             cleanObjectName = char.ToUpper(cleanObjectName[0]) + cleanObjectName[1..];
         }
 
-        // 组合变量名，避免重复
+        // 组合变量名：前缀 + 对象名
         string variableName;
-        if (cleanComponentName.Equals(cleanObjectName, StringComparison.OrdinalIgnoreCase))
-        {
-            // 如果组件名和对象名相同，只使用一个（例如：buttonButton -> button）
-            variableName = cleanComponentName;
-        }
-        else if (cleanObjectName.StartsWith(cleanComponentName, StringComparison.OrdinalIgnoreCase))
-        {
-            // 如果对象名以组件名开头，只使用对象名（例如：buttonTestButton -> testButton）
-            variableName = cleanObjectName;
-        }
-        else
-        {
-            // 否则组合两个名称
-            variableName = cleanComponentName + cleanObjectName;
-        }
+        // if (componentPrefix.Equals(cleanObjectName, StringComparison.OrdinalIgnoreCase))
+        // {
+        //     // 如果前缀和对象名相同，只使用一个（例如：buttonButton -> button）
+        //     variableName = componentPrefix;
+        // }
+        // else if (cleanObjectName.StartsWith(componentPrefix, StringComparison.OrdinalIgnoreCase))
+        // {
+        //     // 如果对象名以前缀开头，只使用对象名（例如：buttonTestButton -> testButton）
+        //     variableName = cleanObjectName;
+        // }
+        // else
+        // {
+            // 否则组合前缀和对象名
+        variableName = componentPrefix + cleanObjectName;
+        //}
+
         return variableName;
+    }
+
+    /// <summary>
+    /// 获取组件类型的前缀
+    /// </summary>
+    /// <param name="componentTypeName">组件类型名称</param>
+    /// <returns>前缀字符串</returns>
+    private string GetComponentPrefix(string componentTypeName)
+    {
+        // 获取全局设置数据
+        var settingsData = UIBindToolWindow.SettingsData;
+        if (settingsData != null)
+        {
+            // 使用配置的前缀
+            return settingsData.GetComponentPrefix(componentTypeName);
+        }
+
+        // 如果设置数据不可用，回退到组件类型小写
+        return componentTypeName.ToLower();
     }
 
     void OnGUI()
@@ -337,6 +344,7 @@ public class UIBindConfigWindow : EditorWindow
     private void DrawVariableNameConfiguration()
     {
         EditorGUILayout.LabelField("变量名配置:", EditorStyles.boldLabel);
+
         EditorGUILayout.BeginHorizontal();
 
         // 动态Label
@@ -349,7 +357,6 @@ public class UIBindConfigWindow : EditorWindow
         // 计算Label所需宽度
         GUIStyle labelStyle = EditorStyles.label;
         Vector2 labelSize = labelStyle.CalcSize(new GUIContent(labelText));
-        //float labelWidth = Mathf.Max(labelSize.x + 5f, 100f); // 至少100像素宽度，减少边距
         float labelWidth = labelSize.x;
         EditorGUILayout.LabelField(labelText, GUILayout.Width(labelWidth));
 
@@ -411,6 +418,14 @@ public class UIBindConfigWindow : EditorWindow
             return;
         }
 
+        // 检查变量名是否重复，如果重复则生成唯一名称
+        string finalVariableName = GenerateUniqueVariableName(variableName, targetObject);
+        if (finalVariableName != variableName)
+        {
+            Debug.Log($"变量名 '{variableName}' 已存在，自动调整为 '{finalVariableName}'");
+            variableName = finalVariableName;
+        }
+
         try
         {
             // 获取或创建绑定数据（使用UI面板的根对象）
@@ -448,5 +463,67 @@ public class UIBindConfigWindow : EditorWindow
             EditorUtility.DisplayDialog("错误", $"添加绑定时发生错误: {e.Message}", "确定");
             // Debug.LogError($"添加绑定失败: {e}");
         }
+    }
+
+    /// <summary>
+    /// 检查变量名是否已存在
+    /// </summary>
+    /// <param name="variableName">要检查的变量名</param>
+    /// <param name="excludeObject">要排除的对象（用于修改时排除自己）</param>
+    /// <returns>如果变量名已存在返回true</returns>
+    private bool IsVariableNameExists(string variableName, GameObject excludeObject = null)
+    {
+        if (string.IsNullOrEmpty(variableName) || rootPanel == null)
+            return false;
+
+        // 获取绑定数据
+        UIPanelBindings bindings = m_parentWindow?.CurrentBindings;
+        if (bindings == null)
+            return false;
+
+        // 检查所有绑定项
+        foreach (var binding in bindings.bindings)
+        {
+            if (binding == null)
+                continue;
+
+            // 如果指定了要排除的对象，跳过该对象的绑定
+            if (excludeObject != null && binding.GetTargetObject() == excludeObject)
+                continue;
+
+            // 检查变量名是否相同（不区分大小写）
+            if (string.Equals(binding.variableName, variableName, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 生成唯一的变量名
+    /// </summary>
+    /// <param name="baseVariableName">基础变量名</param>
+    /// <param name="excludeObject">要排除的对象</param>
+    /// <returns>唯一的变量名</returns>
+    private string GenerateUniqueVariableName(string baseVariableName, GameObject excludeObject = null)
+    {
+        if (string.IsNullOrEmpty(baseVariableName))
+            return baseVariableName;
+
+        // 如果基础名称不重复，直接返回
+        if (!IsVariableNameExists(baseVariableName, excludeObject))
+            return baseVariableName;
+
+        // 生成带数字后缀的唯一名称
+        int suffix = 1;
+        string uniqueName;
+
+        do
+        {
+            uniqueName = $"{baseVariableName}{suffix}";
+            suffix++;
+        } while (IsVariableNameExists(uniqueName, excludeObject));
+
+        return uniqueName;
     }
 }

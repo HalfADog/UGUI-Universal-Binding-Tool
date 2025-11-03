@@ -16,6 +16,7 @@ public class UIBindItem
     public string targetObjectName; // 目标对象的名称
     public string shortTypeName; // 简短类型名
     public string componentTypeName; // 组件类型名称
+    public string componentNamespace; // 组件命名空间
     public string variableName; // 变量名
     private string assemblyQualifiedName;// 完全限定名
     public AccessModifier accessModifier; // 访问修饰符
@@ -30,6 +31,7 @@ public class UIBindItem
         targetObjectName = "";
         componentTypeName = "";
         shortTypeName = "";
+        componentNamespace = "";
         assemblyQualifiedName = "";
         accessModifier = AccessModifier.Private;
         variableName = "";
@@ -76,6 +78,7 @@ public class UIBindItem
 
         componentTypeName = componentType.FullName;
         shortTypeName = componentType.Name;
+        componentNamespace = componentType.Namespace ?? "";
         assemblyQualifiedName = componentType.AssemblyQualifiedName;
         accessModifier = access;
         variableName = varName;
@@ -124,6 +127,7 @@ public class UIBindItem
     public void SetComponentType(Type type)
     {
         componentTypeName = type.FullName;
+        componentNamespace = type.Namespace ?? "";
         assemblyQualifiedName = type.AssemblyQualifiedName;
     }
 

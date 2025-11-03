@@ -212,6 +212,25 @@ public class EditDeleteBindingWindow : EditorWindow
             return;
         }
 
+        // 检查变量名是否重复，如果重复则生成唯一名称
+        string finalVariableName = GenerateUniqueVariableName(m_variableName, m_targetObject);
+        if (finalVariableName != m_variableName)
+        {
+            int acceptNewName = EditorUtility.DisplayDialogComplex(
+                "变量名重复",
+                $"变量名 '{m_variableName}' 已存在，是否使用 '{finalVariableName}'？",
+                "使用新名称", "取消修改", "手动修改");
+
+            if (acceptNewName == 0) // 使用新名称
+            {
+                m_variableName = finalVariableName;
+            }
+            else if (acceptNewName != 2) // 取消修改或手动修改（这里我们直接取消）
+            {
+                return;
+            }
+        }
+
         // 直接更新原始绑定信息
         m_originalBinding.variableName = m_variableName;
         m_originalBinding.accessModifier = m_accessModifier;
@@ -260,5 +279,67 @@ public class EditDeleteBindingWindow : EditorWindow
         }
 
         Close();
+    }
+
+    /// <summary>
+    /// 检查变量名是否已存在
+    /// </summary>
+    /// <param name="variableName">要检查的变量名</param>
+    /// <param name="excludeObject">要排除的对象（用于修改时排除自己）</param>
+    /// <returns>如果变量名已存在返回true</returns>
+    private bool IsVariableNameExists(string variableName, GameObject excludeObject = null)
+    {
+        if (string.IsNullOrEmpty(variableName) || m_rootPanel == null)
+            return false;
+
+        // 获取绑定数据
+        UIPanelBindings bindings = m_parentWindow?.CurrentBindings;
+        if (bindings == null)
+            return false;
+
+        // 检查所有绑定项
+        foreach (var binding in bindings.bindings)
+        {
+            if (binding == null)
+                continue;
+
+            // 如果指定了要排除的对象，跳过该对象的绑定
+            if (excludeObject != null && binding.GetTargetObject() == excludeObject)
+                continue;
+
+            // 检查变量名是否相同（不区分大小写）
+            if (string.Equals(binding.variableName, variableName, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 生成唯一的变量名
+    /// </summary>
+    /// <param name="baseVariableName">基础变量名</param>
+    /// <param name="excludeObject">要排除的对象</param>
+    /// <returns>唯一的变量名</returns>
+    private string GenerateUniqueVariableName(string baseVariableName, GameObject excludeObject = null)
+    {
+        if (string.IsNullOrEmpty(baseVariableName))
+            return baseVariableName;
+
+        // 如果基础名称不重复，直接返回
+        if (!IsVariableNameExists(baseVariableName, excludeObject))
+            return baseVariableName;
+
+        // 生成带数字后缀的唯一名称
+        int suffix = 1;
+        string uniqueName;
+
+        do
+        {
+            uniqueName = $"{baseVariableName}{suffix}";
+            suffix++;
+        } while (IsVariableNameExists(uniqueName, excludeObject));
+
+        return uniqueName;
     }
 }

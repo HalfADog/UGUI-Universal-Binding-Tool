@@ -35,6 +35,15 @@ public class UIBindToolWindow : EditorWindow
     private Vector2 m_SettingsScrollPosition = Vector2.zero; // 设置界面滚动位置
     private static UIBindToolSettingsData s_SettingsData; // 设置数据单例
 
+    // 组件前缀配置相关
+    private string m_NewComponentType = ""; // 新组件类型输入
+    private string m_NewPrefix = ""; // 新前缀输入
+
+    // 测试相关
+    private string m_TestComponentType = ""; // 测试组件类型输入
+    private string m_TestObjectName = ""; // 测试对象名称输入
+    private string m_TestResult = ""; // 测试结果
+
     public GUID PrefabGuid => m_PrefabGuid;
     public static UIBindToolSettingsData SettingsData => s_SettingsData;
     public UIPanelBindings CurrentBindings
@@ -691,6 +700,9 @@ public class UIBindToolWindow : EditorWindow
         EditorGUILayout.Space(10);
 
         DrawAutoOpenGeneratedScripts(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawComponentPrefixSettings();
 
         EditorGUILayout.EndScrollView();
         GUILayout.EndArea();
@@ -1038,6 +1050,125 @@ public class UIBindToolWindow : EditorWindow
         {
             settings.autoOpenGeneratedScripts = newValue;
         }
+    }
+
+    /// <summary>
+    /// 绘制组件前缀配置
+    /// </summary>
+    private void DrawComponentPrefixSettings()
+    {
+        if (s_SettingsData == null)
+            return;
+
+        EditorGUILayout.LabelField("组件前缀配置", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("配置组件类型到变量名前缀的映射，如 Button → btn，生成的变量名将是 btnStartButton", MessageType.Info);
+        EditorGUILayout.Space(5);
+
+        // 显示当前所有映射
+        var mappings = s_SettingsData.componentPrefixMappings;
+        if (mappings.Count == 0)
+        {
+            EditorGUILayout.HelpBox("暂无组件前缀配置", MessageType.Info);
+        }
+        else
+        {
+            // 表头
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("组件类型", GUILayout.Width(120));
+            EditorGUILayout.LabelField("前缀", GUILayout.Width(100));
+            EditorGUILayout.LabelField("操作", GUILayout.Width(80));
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(2);
+
+            // 显示每个映射项
+            for (int i = 0; i < mappings.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+
+                // 组件类型
+                string componentType = EditorGUILayout.TextField(mappings[i].componentType, GUILayout.Width(120));
+                // 前缀
+                string prefix = EditorGUILayout.TextField(mappings[i].prefix, GUILayout.Width(100));
+
+                // 检查是否有修改
+                if (componentType != mappings[i].componentType || prefix != mappings[i].prefix)
+                {
+                    // 验证输入
+                    if (!string.IsNullOrEmpty(componentType) && !string.IsNullOrEmpty(prefix))
+                    {
+                        mappings[i].componentType = componentType;
+                        mappings[i].prefix = prefix;
+                    }
+                }
+
+                // 删除按钮
+                GUI.backgroundColor = Color.red;
+                if (GUILayout.Button("删除", GUILayout.Width(60), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+                {
+                    mappings.RemoveAt(i);
+                    EditorUtility.SetDirty(s_SettingsData);
+                    Repaint();
+                }
+                GUI.backgroundColor = Color.white;
+
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+        EditorGUILayout.Space(5);
+        GUILayout.BeginHorizontal();
+        // 恢复默认配置按钮
+        if (GUILayout.Button("恢复默认配置"))
+        {
+            bool confirm = EditorUtility.DisplayDialog("确认恢复", "是否恢复默认的组件前缀配置？这将覆盖当前所有配置。", "确认", "取消");
+            if (confirm)
+            {
+                s_SettingsData.componentPrefixMappings.Clear();
+                s_SettingsData.InitializeDefaultPrefixMappings();
+                EditorUtility.SetDirty(s_SettingsData);
+            }
+        }
+
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
+        EditorGUILayout.Space(5);
+
+        // 添加新映射区域
+        EditorGUILayout.LabelField("添加新映射", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+
+        EditorGUILayout.LabelField("组件类型:", GUILayout.Width(80));
+        m_NewComponentType = EditorGUILayout.TextField(m_NewComponentType, GUILayout.Width(120));
+
+        EditorGUILayout.LabelField("前缀:", GUILayout.Width(40));
+        m_NewPrefix = EditorGUILayout.TextField(m_NewPrefix, GUILayout.Width(80));
+
+        // 添加按钮
+        GUI.backgroundColor = Color.green;
+        bool canAdd = !string.IsNullOrEmpty(m_NewComponentType) && !string.IsNullOrEmpty(m_NewPrefix);
+        GUI.enabled = canAdd;
+        if (GUILayout.Button("添加", GUILayout.Width(60), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+        {
+            // 检查是否已存在相同组件类型
+            bool exists = mappings.Exists(m => m.componentType == m_NewComponentType);
+            if (exists)
+            {
+                EditorUtility.DisplayDialog("错误", $"组件类型 '{m_NewComponentType}' 已存在", "确定");
+            }
+            else
+            {
+                mappings.Add(new ComponentPrefixMapping(m_NewComponentType, m_NewPrefix));
+                EditorUtility.SetDirty(s_SettingsData);
+
+                // 清空输入框
+                m_NewComponentType = "";
+                m_NewPrefix = "";
+            }
+        }
+        GUI.enabled = true;
+        GUI.backgroundColor = Color.white;
+
+        EditorGUILayout.EndHorizontal();
     }
 
     /// <summary>

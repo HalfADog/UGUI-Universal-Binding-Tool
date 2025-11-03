@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -179,6 +180,63 @@ public static class UIBindScriptGenerator
 
     #endregion
 
+    #region 命名空间处理
+
+    /// <summary>
+    /// 收集所有绑定项的命名空间
+    /// </summary>
+    /// <param name="bindings">绑定数据</param>
+    /// <returns>去重后的命名空间列表</returns>
+    private static HashSet<string> CollectNamespaces(UIPanelBindings bindings)
+    {
+        var namespaces = new HashSet<string>();
+
+        if (bindings == null || bindings.bindings == null)
+            return namespaces;
+
+        // 使用确保变量名唯一的绑定列表
+        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
+
+        foreach (var binding in uniqueBindings)
+        {
+            if (binding == null || string.IsNullOrEmpty(binding.componentNamespace))
+                continue;
+            namespaces.Add(binding.componentNamespace);
+        }
+
+        return namespaces;
+    }
+
+    /// <summary>
+    /// 生成动态using语句
+    /// </summary>
+    /// <param name="bindings">绑定数据</param>
+    /// <returns>using语句代码</returns>
+    private static string GenerateUsingStatements(UIPanelBindings bindings)
+    {
+        var code = new System.Text.StringBuilder();
+
+        // 核心命名空间（总是包含）
+        code.AppendLine("using UnityEngine;");
+        code.AppendLine("using UnityEngine.UI;");
+
+        // 收集并添加动态命名空间
+        var namespaces = CollectNamespaces(bindings);
+        if (namespaces.Count > 0)
+        {
+            // 排序命名空间以确保输出的一致性
+            var sortedNamespaces = namespaces.OrderBy(n => n).ToList();
+            foreach (var ns in sortedNamespaces)
+            {
+                code.AppendLine($"using {ns};");
+            }
+        }
+        code.AppendLine();
+        return code.ToString();
+    }
+
+    #endregion
+
     #region 代码模板生成
 
     /// <summary>
@@ -189,12 +247,9 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
 
-        // Using声明（总是在namespace外面）
-        code.AppendLine("using UnityEngine;");
-        code.AppendLine("using UnityEngine.UI;");
-        code.AppendLine("using TMPro;");
-        code.AppendLine("using System;");
-        code.AppendLine();
+        // 动态生成using语句
+        string usingStatements = GenerateUsingStatements(bindings);
+        code.Append(usingStatements);
 
         // 命名空间声明
         string namespaceDecl = GetNamespaceDeclaration(config);
@@ -252,12 +307,9 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
 
-        // Using声明（总是在namespace外面）
-        code.AppendLine("using UnityEngine;");
-        code.AppendLine("using UnityEngine.UI;");
-        code.AppendLine("using TMPro;");
-        code.AppendLine("using System;");
-        code.AppendLine();
+        // 动态生成using语句
+        string usingStatements = GenerateUsingStatements(bindings);
+        code.Append(usingStatements);
 
         // 命名空间声明
         string namespaceDecl = GetNamespaceDeclaration(config);
@@ -325,12 +377,9 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
 
-        // Using声明（总是在namespace外面）
-        code.AppendLine("using UnityEngine;");
-        code.AppendLine("using UnityEngine.UI;");
-        code.AppendLine("using TMPro;");
-        code.AppendLine("using System;");
-        code.AppendLine();
+        // 动态生成using语句
+        string usingStatements = GenerateUsingStatements(bindings);
+        code.Append(usingStatements);
 
         // 命名空间声明
         string namespaceDecl = GetNamespaceDeclaration(config);
@@ -410,7 +459,10 @@ public static class UIBindScriptGenerator
     {
         var code = new System.Text.StringBuilder();
 
-        foreach (var binding in bindings.bindings)
+        // 在生成代码前进行最终的重复检查和修正
+        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
+
+        foreach (var binding in uniqueBindings)
         {
             string accessModifier = binding.accessModifier.ToString().ToLower();
             if (string.IsNullOrEmpty(accessModifier))
@@ -432,7 +484,10 @@ public static class UIBindScriptGenerator
     {
         var code = new System.Text.StringBuilder();
 
-        foreach (var binding in bindings.bindings)
+        // 使用确保变量名唯一的绑定列表
+        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
+
+        foreach (var binding in uniqueBindings)
         {
             // 优先使用相对路径，如果没有相对路径则使用绝对路径并转换
             string path = "";
@@ -504,7 +559,10 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         var generatedHandlers = new HashSet<string>();
 
-        foreach (var binding in bindings.bindings)
+        // 使用确保变量名唯一的绑定列表
+        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
+
+        foreach (var binding in uniqueBindings)
         {
             string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
             if (generatedHandlers.Contains(methodName))
@@ -565,7 +623,10 @@ public static class UIBindScriptGenerator
         var code = new System.Text.StringBuilder();
         var generatedHandlers = new HashSet<string>();
 
-        foreach (var binding in bindings.bindings)
+        // 使用确保变量名唯一的绑定列表
+        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
+
+        foreach (var binding in uniqueBindings)
         {
             string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
 
@@ -756,6 +817,68 @@ public static class UIBindScriptGenerator
             Directory.CreateDirectory(folderPath);
             AssetDatabase.Refresh();
         }
+    }
+
+    /// <summary>
+    /// 确保所有绑定项的变量名都是唯一的
+    /// 这是代码生成前的最后一道保障
+    /// </summary>
+    /// <param name="bindings">绑定项列表</param>
+    /// <returns>变量名唯一的绑定项列表</returns>
+    private static List<UIBindItem> EnsureUniqueVariableNames(List<UIBindItem> bindings)
+    {
+        if (bindings == null || bindings.Count == 0)
+            return new List<UIBindItem>();
+
+        var uniqueBindings = new List<UIBindItem>();
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var binding in bindings)
+        {
+            if (binding == null)
+                continue;
+
+            string originalName = binding.variableName;
+            string finalName = originalName;
+
+            // 如果变量名已使用，生成唯一名称
+            int suffix = 1;
+            while (usedNames.Contains(finalName))
+            {
+                finalName = $"{originalName}{suffix}";
+                suffix++;
+            }
+
+            // 如果名称被修改，创建新的绑定项（避免修改原始数据）
+            if (finalName != originalName)
+            {
+                var newBinding = new UIBindItem();
+                // 复制所有属性
+                newBinding.targetInstanceID = binding.targetInstanceID;
+                newBinding.targetObjectFileID = binding.targetObjectFileID;
+                newBinding.targetObjectFullPathInScene = binding.targetObjectFullPathInScene;
+                newBinding.targetObjectRelativePath = binding.targetObjectRelativePath;
+                newBinding.targetObjectName = binding.targetObjectName;
+                newBinding.shortTypeName = binding.shortTypeName;
+                newBinding.componentTypeName = binding.componentTypeName;
+                newBinding.componentNamespace = binding.componentNamespace;
+                newBinding.SetComponentType(binding.GetComponentType());
+                newBinding.variableName = finalName;
+                newBinding.accessModifier = binding.accessModifier;
+                newBinding.isEnabled = binding.isEnabled;
+
+                uniqueBindings.Add(newBinding);
+                Debug.LogWarning($"变量名重复：'{originalName}' 已调整为 '{finalName}' 以确保代码生成正确");
+            }
+            else
+            {
+                uniqueBindings.Add(binding);
+            }
+
+            usedNames.Add(finalName);
+        }
+
+        return uniqueBindings;
     }
 
     #endregion
