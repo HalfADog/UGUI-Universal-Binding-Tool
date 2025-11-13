@@ -231,15 +231,48 @@ public class EditDeleteBindingWindow : EditorWindow
             }
         }
 
-        // 直接更新原始绑定信息
-        m_originalBinding.variableName = m_variableName;
-        m_originalBinding.accessModifier = m_accessModifier;
-        //m_originalBinding.isEnabled = m_isEnabled;
+        // 检查变量名是否发生变化
+        bool isVariableNameChanged = m_originalBinding.variableName != m_variableName;
+
+        // 创建一个新的绑定项，保留所有原有信息，只更新需要修改的字段
+        UIBindItem updatedBinding = new UIBindItem
+        {
+            targetInstanceID = m_originalBinding.targetInstanceID,
+            targetObjectFileID = m_originalBinding.targetObjectFileID,
+            targetObjectFullPathInScene = m_originalBinding.targetObjectFullPathInScene,
+            targetObjectRelativePath = m_originalBinding.targetObjectRelativePath,
+            targetObjectName = m_originalBinding.targetObjectName,
+            componentTypeName = m_originalBinding.componentTypeName,
+            shortTypeName = m_originalBinding.shortTypeName,
+            componentNamespace = m_originalBinding.componentNamespace,
+            assemblyQualifiedName = m_originalBinding.assemblyQualifiedName,
+            variableName = m_variableName,
+            accessModifier = m_accessModifier,
+            isEnabled = m_originalBinding.isEnabled
+        };
+
+        // 如果变量名发生变化，记录旧名称
+        if (isVariableNameChanged)
+        {
+            updatedBinding.previousVariableName = m_originalBinding.variableName;
+            Debug.Log($"[EditDeleteBindingWindow] 记录变量名变更: {m_originalBinding.variableName} → {m_variableName}");
+        }
+        else
+        {
+            // 如果没有变化，保持原有的previousVariableName（可能之前已经有记录）
+            updatedBinding.previousVariableName = m_originalBinding.previousVariableName;
+        }
+
+        // 使用UpdateBinding来更新（UIPanelBindings内会记录撤销操作）
+        bindings.UpdateBinding(updatedBinding);
 
         // 保存绑定数据
         UIBindDataManager.SaveBindings(bindings);
 
-        //EditorUtility.DisplayDialog("Success", "Binding updated successfully!", "OK");
+        // 标记场景为已修改（支持撤销）
+        UndoHelper.MarkSceneDirty();
+
+        // 关闭窗口
         Close();
     }
 
@@ -266,12 +299,15 @@ public class EditDeleteBindingWindow : EditorWindow
             return;
         }
 
-        // 删除绑定
+        // 删除绑定（UIPanelBindings内会记录撤销操作）
         bool removed = bindings.RemoveBinding(m_originalBinding);
         if (removed)
         {
             // 保存绑定数据
             UIBindDataManager.SaveBindings(bindings);
+
+            // 标记场景为已修改（支持撤销）
+            UndoHelper.MarkSceneDirty();
         }
         else
         {

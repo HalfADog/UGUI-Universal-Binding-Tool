@@ -288,6 +288,7 @@ public class UIBindDataManager
                 AssetDatabase.TryGetGUIDAndLocalFileIdentifier(child.gameObject, out string guid, out long fileID);
                 string relativePath = UIPanelBindings.GetGameObjectRelativePath(prefabAsset, child.gameObject);
                 prefabObjectData[fileID] = relativePath;
+                Debug.Log(relativePath);
             }
             //包括Prefab根对象
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(prefabAsset, out string rootGuid, out rootFileID);
@@ -299,7 +300,14 @@ public class UIBindDataManager
             string path = prefabObjectData[bindItem.targetObjectFileID];
             bindItem.targetObjectFullPathInScene = bindings.panelPathInScene;
             if (bindItem.targetObjectFileID != rootFileID)
+            {
+                bindItem.targetObjectRelativePath = path;
                 bindItem.targetObjectFullPathInScene += (string.IsNullOrEmpty(path) ? "" : "/" + path);
+            }
+            else
+            {
+                bindItem.targetObjectRelativePath = "[ROOT]";
+            }
             bindItem.targetObjectName = path.Substring(path.LastIndexOf('/') + 1);
             bindItem.targetInstanceID = GameObject.Find(bindItem.targetObjectFullPathInScene)?.GetInstanceID() ?? 0;
         }

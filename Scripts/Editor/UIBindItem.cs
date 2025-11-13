@@ -18,6 +18,7 @@ public class UIBindItem
     public string componentTypeName; // 组件类型名称
     public string componentNamespace; // 组件命名空间
     public string variableName; // 变量名
+    public string previousVariableName; // 之前的变量名（用于重命名追踪）
     public string assemblyQualifiedName;// 完全限定名
     public AccessModifier accessModifier; // 访问修饰符
     public bool isEnabled; // 是否启用该绑定
@@ -82,6 +83,7 @@ public class UIBindItem
         assemblyQualifiedName = componentType.AssemblyQualifiedName;
         accessModifier = access;
         variableName = varName;
+        previousVariableName = ""; // 初始化为空
         isEnabled = true;
     }
 
@@ -138,5 +140,21 @@ public class UIBindItem
     {
         var target = GetTargetObject();
         return target != null && target.name == targetObjectName;
+    }
+
+    /// <summary>
+    /// 判断是否发生了变量名重命名
+    /// </summary>
+    public bool HasVariableNameChanged()
+    {
+        return !string.IsNullOrEmpty(previousVariableName) && previousVariableName != variableName;
+    }
+
+    /// <summary>
+    /// 清除重命名历史记录
+    /// </summary>
+    public void ClearRenameHistory()
+    {
+        previousVariableName = "";
     }
 }

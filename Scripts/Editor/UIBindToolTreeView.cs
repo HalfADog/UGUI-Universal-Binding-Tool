@@ -148,15 +148,42 @@ public class UIBindToolTreeView : TreeView
         {
             UIBindItem binding = validBindings[i];
 
-            // 动态计算组件宽度（基于文本长度）
-            Vector2 textSize = labelStyle.CalcSize(new GUIContent(binding.shortTypeName));
-            float componentWidth = Mathf.Max(textSize.x + padding * 2 + 8f, 60f); // 最小宽度60，额外8像素缓冲
+            // 创建样式 - 组件名称（较大字体）
+            GUIStyle componentNameStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 11, // 组件名称使用11号字体
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.white },
+                hover = { textColor = Color.white },
+                clipping = TextClipping.Clip
+            };
+
+            // 创建样式 - 变量名（较小字体）
+            GUIStyle variableNameStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 9, // 变量名使用9号字体（更小）
+                fontStyle = FontStyle.Normal, // 变量名不使用粗体
+                normal = { textColor = new Color(1f, 1f, 1f, 0.9f) }, // 稍淡的颜色
+                hover = { textColor = new Color(1f, 1f, 1f, 0.9f) },
+                clipping = TextClipping.Clip
+            };
+
+            // 测量文本尺寸
+            Vector2 componentNameSize = componentNameStyle.CalcSize(new GUIContent(binding.shortTypeName));
+            Vector2 variableNameSize = variableNameStyle.CalcSize(new GUIContent(binding.variableName));
+
+            // 计算总宽度和高度
+            float spacingBetween = 2f; // 组件名称和变量名之间的间距
+            float totalTextWidth = componentNameSize.x + spacingBetween + variableNameSize.x + padding * 2;
+            float componentWidth = Mathf.Max(totalTextWidth, 60f); // 最小宽度60
 
             // 检查是否超出单元格边界
-            if (currentX + componentWidth > cellRect.x + cellRect.width - spacing)
-                break;
+            // if (currentX + componentWidth > cellRect.x + cellRect.width - spacing)
+            //     break;
 
-            Rect componentRect = new(currentX + padding, startY, componentWidth - padding * 2, componentHeight);
+            Rect componentRect = new(currentX + padding, startY, componentWidth - padding, componentHeight);
 
             // 根据访问修饰符设置颜色
             Color backgroundColor = GetColorForAccessModifier(binding.accessModifier);
@@ -164,16 +191,19 @@ public class UIBindToolTreeView : TreeView
             // 绘制普通矩形背景
             EditorGUI.DrawRect(componentRect, backgroundColor);
 
-            // 绘制文本
-            GUIStyle textStyle = new(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white },
-                hover = { textColor = Color.white }
-            };
-            GUI.Label(componentRect, binding.shortTypeName, textStyle);
+            // 计算文本位置 - 垂直居中
+            float textStartX = componentRect.x + padding / 2;
+            float textY = componentRect.y + (componentHeight - componentNameSize.y) * 0.5f;
+
+            // 绘制组件名称（较大字体）
+            Rect componentNameRect = new(textStartX, textY, componentNameSize.x, componentNameSize.y);
+            GUI.Label(componentNameRect, binding.shortTypeName, componentNameStyle);
+
+            // 绘制变量名（较小字体）
+            textStartX += componentNameSize.x + spacingBetween;
+            float variableNameY = componentRect.y + (componentHeight - variableNameSize.y) * 0.5f;
+            Rect variableNameRect = new(textStartX, variableNameY, variableNameSize.x, variableNameSize.y);
+            GUI.Label(variableNameRect, binding.variableName, variableNameStyle);
 
             // 设置光标为手型
             EditorGUIUtility.AddCursorRect(componentRect, MouseCursor.Link);

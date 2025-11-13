@@ -174,7 +174,6 @@ public class UIBindToolWindow : EditorWindow
         }
     }
 
-    
     void OnEnable()
     {
         // 加载设置数据
@@ -203,8 +202,8 @@ public class UIBindToolWindow : EditorWindow
         // 确保 TreeViewState 存在
         if (m_TreeViewState == null)
             m_TreeViewState = new TreeViewState();
-        // --- 创建 Header 和 HeaderState ---
 
+        // --- 创建 Header 和 HeaderState ---
         var headerState = CreateHeaderState();
 
         if (MultiColumnHeaderState.CanOverwriteSerializedFields(m_HeaderState, headerState))
@@ -220,14 +219,43 @@ public class UIBindToolWindow : EditorWindow
 
         //默认展开
         ExpandAll();
+
+        // 注册撤销/重做事件监听
+        Undo.undoRedoPerformed += OnUndoRedoPerformed;
+        Debug.Log("[UIBindToolWindow] 撤销/重做系统已初始化");
     }
 
     void OnDisable()
     {
+        // 注销撤销/重做事件监听
+        Undo.undoRedoPerformed -= OnUndoRedoPerformed;
+
         // 保存数据
         UIBindDataManager.SaveBindings(CurrentBindings);
+
+        Debug.Log("[UIBindToolWindow] 撤销/重做系统已关闭");
     }
-    
+
+    /// <summary>
+    /// 撤销/重做回调
+    /// 当用户执行撤销/重做操作时刷新界面
+    /// </summary>
+    private void OnUndoRedoPerformed()
+    {
+        Debug.Log("[UIBindToolWindow] 撤销/重做操作已触发，刷新界面");
+
+        // 重新加载数据
+        UpdateCurrentBindingsData();
+
+        // 刷新TreeView
+        if (m_UIBindToolTreeView != null)
+        {
+            m_UIBindToolTreeView.Reload();
+        }
+
+        // 重绘窗口
+        Repaint();
+    }
     void OnGUI()
     {
         // 绘制ToolBar
@@ -674,32 +702,39 @@ public class UIBindToolWindow : EditorWindow
         GUILayout.BeginArea(rect);
         m_SettingsScrollPosition = EditorGUILayout.BeginScrollView(m_SettingsScrollPosition);
 
-        EditorGUILayout.Space(10);
-        // 绘制各个设置字段
-        DrawSettingsName(currentSettings);
-        EditorGUILayout.Space(10);
+        // 分组1：基础设置
+        DrawSection("基础设置", () =>
+        {
+            DrawSettingsName(currentSettings);
+            EditorGUILayout.Space(5);
+            DrawAutoOpenGeneratedScripts(currentSettings);
+        }, "基础设置影响默认行为和基本配置");
 
-        DrawBindDataFolder(currentSettings);
-        EditorGUILayout.Space(10);
+        // 分组2：数据存储
+        DrawSection("数据存储", () =>
+        {
+            DrawBindDataFolder(currentSettings);
+        }, "配置绑定数据文件的存储位置");
 
-        DrawGenerateUIBindScriptFolder(currentSettings);
-        EditorGUILayout.Space(10);
+        // 分组3：代码生成
+        DrawSection("代码生成", () =>
+        {
+            DrawGenerateUIBindScriptFolder(currentSettings);
+            EditorGUILayout.Space(5);
+            DrawGenerateUIMainScriptFolder(currentSettings);
+            EditorGUILayout.Space(5);
+            DrawTemplateTextFilePath(currentSettings);
+            EditorGUILayout.Space(5);
+            DrawBaseClassOrInterfaceNames(currentSettings);
+        }, "配置生成脚本的路径和模板");
 
-        DrawGenerateUIMainScriptFolder(currentSettings);
-        EditorGUILayout.Space(10);
+        // 分组4：命名空间
+        DrawSection("命名空间", () =>
+        {
+            DrawNamespaceSettings(currentSettings);
+        }, "配置生成脚本的命名空间");
 
-        DrawTemplateTextFilePath(currentSettings);
-        EditorGUILayout.Space(10);
-
-        DrawBaseClassOrInterfaceNames(currentSettings);
-        EditorGUILayout.Space(10);
-
-        DrawNamespaceSettings(currentSettings);
-        EditorGUILayout.Space(10);
-
-        DrawAutoOpenGeneratedScripts(currentSettings);
-        EditorGUILayout.Space(10);
-
+        // 分组5：组件前缀配置（保持独立区域，更复杂）
         DrawComponentPrefixSettings();
 
         EditorGUILayout.EndScrollView();
@@ -753,8 +788,8 @@ public class UIBindToolWindow : EditorWindow
                 }
             }
 
-            // 注册自动绑定任务
-            if (result.success && !string.IsNullOrEmpty(result.mainScriptPath) && result.targetPanel != null)
+            // 始终注册自动绑定任务（只要类名存在）
+            if (!string.IsNullOrEmpty(result.mainScriptClassName) && result.targetPanel != null)
             {
                 // 获取绑定数据路径
                 string bindingsDataPath = "";
@@ -854,6 +889,43 @@ public class UIBindToolWindow : EditorWindow
     }
 
     #region 设置界面绘制方法
+
+    /// <summary>
+    /// 绘制分组容器
+    /// </summary>
+    private void DrawSection(string title, System.Action content, string helpText = null)
+    {
+        EditorGUILayout.Space(5);
+
+        // 分组标题
+        GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            fontSize = 13,
+            margin = new RectOffset(5, 5, 10, 5)
+        };
+        EditorGUILayout.LabelField(new GUIContent(title,helpText), titleStyle);
+
+        // 帮助文本（可选）
+        // if (!string.IsNullOrEmpty(helpText))
+        // {
+        //     EditorGUILayout.HelpBox(helpText, MessageType.Info);
+        // }
+
+        // 绘制分组背景
+        Rect rect = EditorGUILayout.BeginVertical();
+        GUI.Box(rect, GUIContent.none, new GUIStyle()
+        {
+            padding = new RectOffset(15, 15, 8, 8),
+            margin = new RectOffset(5, 5, 0, 10)
+        });
+
+        EditorGUI.indentLevel++;
+        content.Invoke();
+        EditorGUI.indentLevel--;
+
+        EditorGUILayout.EndVertical();
+        EditorGUILayout.Space(10);
+    }
 
     /// <summary>
     /// 绘制设置名称
@@ -1071,8 +1143,12 @@ public class UIBindToolWindow : EditorWindow
     {
         if (s_SettingsData == null)
             return;
-
-        EditorGUILayout.LabelField("组件前缀配置", EditorStyles.boldLabel);
+        GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            fontSize = 13,
+            margin = new RectOffset(5, 5, 10, 5)
+        };
+        EditorGUILayout.LabelField("组件前缀配置",titleStyle);
         EditorGUILayout.HelpBox("配置组件类型到变量名前缀的映射，如 Button → btn，生成的变量名将是 btnStartButton", MessageType.Info);
         EditorGUILayout.Space(5);
 

@@ -449,11 +449,14 @@ public class UIBindConfigWindow : EditorWindow
             // 创建新的绑定项
             UIBindItem newBinding = new UIBindItem(targetObject,targetObjectInPrefab,rootPanel,selectedComponentType, selectedAccessModifier, variableName);
 
-            // 添加到绑定数据中
+            // 添加到绑定数据中（UIPanelBindings内会记录撤销操作）
             bindings.AddBinding(newBinding);
 
             // 保存数据
             UIBindDataManager.SaveBindings(bindings);
+
+            // 标记场景为已修改（支持撤销）
+            UndoHelper.MarkSceneDirty();
 
             // 关闭窗口
             Close();

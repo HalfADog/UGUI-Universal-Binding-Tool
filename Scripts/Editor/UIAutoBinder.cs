@@ -245,7 +245,7 @@ public static class UIAutoBinder
                 }
                 else
                 {
-                    property.objectReferenceValue = targetPanel.transform.Find(binding.targetObjectRelativePath).GetComponent(type);
+                    property.objectReferenceValue = targetPanel.transform.Find(binding.targetObjectRelativePath)?.GetComponent(type);
                 }
             }
             catch (Exception e)

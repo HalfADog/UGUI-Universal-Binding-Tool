@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -170,18 +171,87 @@ public static class UIBindScriptGenerator
             result.bindingScriptPath = bindingPath;
             Debug.Log($"生成绑定脚本: {bindingPath}");
 
-            // 生成主脚本（如果指定了模板文件）
+            // 生成主脚本（如果指定了模板文件且主脚本不存在）
+            string mainScriptPath = null;
             if (!string.IsNullOrEmpty(config.templateTextFilePath) &&
                 !string.IsNullOrEmpty(config.uiMainScriptFolder))
             {
-                string mainScriptCode = GenerateMainScriptFromTemplate(bindings, config);
-                if (!string.IsNullOrEmpty(mainScriptCode))
+                mainScriptPath = Path.Combine(config.uiMainScriptFolder, GetMainScriptName(bindings));
+
+                // 始终设置类名（即使主脚本已存在）
+                result.mainScriptClassName = GetBindingClassName(bindings);
+
+                // 检查主脚本是否已存在
+                if (File.Exists(mainScriptPath))
                 {
-                    string mainScriptPath = Path.Combine(config.uiMainScriptFolder, GetMainScriptName(bindings));
-                    File.WriteAllText(mainScriptPath, mainScriptCode);
-                    result.mainScriptPath = mainScriptPath;
-                    result.mainScriptClassName = GetBindingClassName(bindings);
-                    Debug.Log($"生成主脚本: {mainScriptPath}");
+                    Debug.Log($"主脚本已存在，跳过生成: {mainScriptPath}");
+                }
+                else
+                {
+                    string mainScriptCode = GenerateMainScriptFromTemplate(bindings, config);
+                    if (!string.IsNullOrEmpty(mainScriptCode))
+                    {
+                        File.WriteAllText(mainScriptPath, mainScriptCode);
+                        result.mainScriptPath = mainScriptPath;
+                        Debug.Log($"生成主脚本: {mainScriptPath}");
+                    }
+                }
+            }
+
+            // 处理变量名重命名（如果主脚本已存在且有变量名变更）
+            if (!string.IsNullOrEmpty(mainScriptPath) && File.Exists(mainScriptPath))
+            {
+                // 收集所有有重命名历史的绑定项
+                var renamedBindings = bindings.bindings?.Where(b => b != null && b.HasVariableNameChanged()).ToList();
+
+                if (renamedBindings != null && renamedBindings.Count > 0)
+                {
+                    try
+                    {
+                        Debug.Log($"[UIBindScriptGenerator] 检测到 {renamedBindings.Count} 个变量名需要更新");
+
+                        // 读取主脚本内容
+                        string mainScriptContent = File.ReadAllText(mainScriptPath);
+                        int totalReplacements = 0;
+
+                        // 执行变量名替换
+                        foreach (var binding in renamedBindings)
+                        {
+                            string oldName = binding.previousVariableName;
+                            string newName = binding.variableName;
+
+                            // 使用正则表达式精确匹配变量名（使用单词边界）
+                            string pattern = $@"\b{Regex.Escape(oldName)}\b";
+
+                            // 执行替换
+                            int replacements = 0;
+                            mainScriptContent = Regex.Replace(mainScriptContent, pattern, m =>
+                            {
+                                replacements++;
+                                return newName;
+                            });
+
+                            if (replacements > 0)
+                            {
+                                Debug.Log($"[UIBindScriptGenerator] 替换变量名: {oldName} → {newName} ({replacements} 处)");
+                                totalReplacements += replacements;
+                            }
+
+                            // 清除重命名历史（避免重复替换）
+                            binding.ClearRenameHistory();
+                        }
+
+                        // 如果有替换，保存修改后的主脚本
+                        if (totalReplacements > 0)
+                        {
+                            File.WriteAllText(mainScriptPath, mainScriptContent);
+                            Debug.Log($"[UIBindScriptGenerator] 更新主脚本完成，共替换 {totalReplacements} 处");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[UIBindScriptGenerator] 更新主脚本变量名时出错: {e.Message}");
+                    }
                 }
             }
 
@@ -219,10 +289,9 @@ public static class UIBindScriptGenerator
     private static HashSet<string> CollectNamespaces(UIPanelBindings bindings)
     {
         var namespaces = new HashSet<string>();
-
         if (bindings == null || bindings.bindings == null)
             return namespaces;
-
+        namespaces.Add("UnityEngine");
         // 使用确保变量名唯一的绑定列表
         var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
 
@@ -244,7 +313,6 @@ public static class UIBindScriptGenerator
     private static string GenerateUsingStatements(UIPanelBindings bindings)
     {
         var code = new System.Text.StringBuilder();
-
         // 收集并添加动态命名空间
         var namespaces = CollectNamespaces(bindings);
         if (namespaces.Count > 0)

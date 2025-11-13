@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -26,8 +27,13 @@ public class UIPanelBindings : ScriptableObject
     {
         if (binding != null && binding.GetTargetObject() != null)
         {
+            // 记录撤销操作
+            UndoHelper.RecordBindings(this, UndoHelper.GetUndoName("Add Binding", binding.GetTargetObject(), binding.GetComponentType()));
+
             bindings.Add(binding);
             lastModifiedTime = DateTime.Now;
+
+            Debug.Log($"[UIPanelBindings] 添加绑定: {binding.variableName}");
         }
     }
 
@@ -36,11 +42,19 @@ public class UIPanelBindings : ScriptableObject
     /// </summary>
     public bool RemoveBinding(UIBindItem binding)
     {
+        if (binding == null)
+            return false;
+
+        // 记录撤销操作
+        UndoHelper.RecordBindings(this, UndoHelper.GetUndoName("Remove Binding", binding.GetTargetObject(), binding.GetComponentType()));
+
         bool removed = bindings.Remove(binding);
         if (removed)
         {
             lastModifiedTime = DateTime.Now;
+            Debug.Log($"[UIPanelBindings] 移除绑定: {binding.variableName}");
         }
+
         return removed;
     }
 
@@ -52,10 +66,18 @@ public class UIPanelBindings : ScriptableObject
         if (targetObject == null)
             return 0;
 
+        // 记录撤销操作
+        int countToRemove = bindings.Count(b => b != null && b.GetTargetObject() == targetObject);
+        if (countToRemove > 0)
+        {
+            UndoHelper.RecordBindings(this, UndoHelper.GetDeleteAllUndoName(targetObject, countToRemove));
+        }
+
         int count = bindings.RemoveAll(b => b != null && b.GetTargetObject() == targetObject);
         if (count > 0)
         {
             lastModifiedTime = DateTime.Now;
+            Debug.Log($"[UIPanelBindings] 移除 {targetObject.name} 的 {count} 个绑定");
         }
         return count;
     }
@@ -91,20 +113,45 @@ public class UIPanelBindings : ScriptableObject
 
     /// <summary>
     /// 更新绑定项
-    /// </summary>
+    /// <param name="binding">新的绑定数据</param>
     public void UpdateBinding(UIBindItem binding)
     {
-        if (binding == null)
+        if (binding == null || binding.GetTargetObject() == null)
             return;
 
+        // 查找索引
         int index = bindings.FindIndex(b =>
             b != null &&
             b.GetTargetObject() == binding.GetTargetObject() &&
             b.componentTypeName == binding.componentTypeName);
+
         if (index >= 0)
         {
+            var oldBinding = bindings[index];
+
+            // 构建描述性操作名称
+            string changedProperties = string.Empty;
+            if (oldBinding.variableName != binding.variableName)
+                changedProperties += $"变量名: {oldBinding.variableName} → {binding.variableName}";
+            if (oldBinding.accessModifier != binding.accessModifier)
+            {
+                if (!string.IsNullOrEmpty(changedProperties))
+                    changedProperties += "，";
+                changedProperties += $"访问修饰符: {oldBinding.accessModifier} → {binding.accessModifier}";
+            }
+
+            string operationName = string.IsNullOrEmpty(changedProperties)
+                ? UndoHelper.GetUndoName("Modify Binding", binding.GetTargetObject(), binding.GetComponentType())
+                : $"Modify Binding: {changedProperties}";
+
+            // 记录撤销操作
+            UndoHelper.RecordBindings(this, operationName);
+
+            // 执行更新
             bindings[index] = binding;
             lastModifiedTime = DateTime.Now;
+
+            Debug.Log($"[UIPanelBindings] 更新绑定: {binding.variableName}");
         }
     }
 
