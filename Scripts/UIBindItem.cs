@@ -18,7 +18,7 @@ public class UIBindItem
     public string componentTypeName; // 组件类型名称
     public string componentNamespace; // 组件命名空间
     public string variableName; // 变量名
-    private string assemblyQualifiedName;// 完全限定名
+    public string assemblyQualifiedName;// 完全限定名
     public AccessModifier accessModifier; // 访问修饰符
     public bool isEnabled; // 是否启用该绑定
 

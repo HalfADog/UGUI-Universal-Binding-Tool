@@ -119,6 +119,30 @@ public class UIBindDataManager
     }
 
     /// <summary>
+    /// 通过路径加载绑定数据
+    /// </summary>
+    /// <param name="assetPath">绑定数据文件路径</param>
+    /// <returns>绑定数据ScriptableObject，如果不存在则返回null</returns>
+    public static UIPanelBindings LoadBindings(string assetPath)
+    {
+        if (string.IsNullOrEmpty(assetPath))
+        {
+            Debug.LogWarning("绑定数据路径为空，无法加载");
+            return null;
+        }
+
+        if (File.Exists(assetPath))
+        {
+            return AssetDatabase.LoadAssetAtPath<UIPanelBindings>(assetPath);
+        }
+        else
+        {
+            Debug.LogWarning($"绑定数据文件不存在: {assetPath}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 保存绑定数据
     /// </summary>
     /// <param name="bindings">要保存的绑定数据</param>
@@ -195,7 +219,7 @@ public class UIBindDataManager
     /// </summary>
     /// <param name="targetPanel">目标UI面板</param>
     /// <returns>Asset路径</returns>
-    private static string GetBindingsAssetPath(GameObject targetPanel)
+    public static string GetBindingsAssetPath(GameObject targetPanel)
     {
         //获取GUID
         string prefabGuid = GetPrefabGUID(targetPanel).ToString();
@@ -211,6 +235,30 @@ public class UIBindDataManager
         }
         // 使用面板名称作为文件名，确保唯一性
         string fileName = targetPanel.name;
+        string safeFileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
+        return $"{GetBindDataFolder()}/{safeFileName}{BIND_DATA_EXTENSION}";
+    }
+
+    /// <summary>
+    /// 获取绑定数据的Asset路径
+    /// </summary>
+    /// <param name="bindings">绑定数据对象</param>
+    /// <returns>Asset路径</returns>
+    public static string GetBindingsAssetPath(UIPanelBindings bindings)
+    {
+        if (bindings == null)
+            return "";
+
+        // 如果已有GUID，尝试通过GUID查找
+        if (!string.IsNullOrEmpty(bindings.panelPrefabGUID))
+        {
+            string path = AssetDatabase.GetAssetPath(bindings);
+            if (!string.IsNullOrEmpty(path))
+                return path;
+        }
+
+        // 使用面板名称作为文件名，确保唯一性
+        string fileName = bindings.panelName;
         string safeFileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
         return $"{GetBindDataFolder()}/{safeFileName}{BIND_DATA_EXTENSION}";
     }

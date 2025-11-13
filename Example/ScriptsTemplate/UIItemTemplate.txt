@@ -1,0 +1,34 @@
+using UnityEngine;
+
+public partial class <ClassName> : MonoBehaviour
+{
+    void Awake()
+    {
+
+    }
+
+    void OnEnable()
+    {
+        
+    }
+
+    void Start()
+    {
+        
+    }
+
+    void Update()
+    {
+
+    }
+
+    void LateUpdate()
+    {
+
+    }
+
+    void OnDisable()
+    {
+        
+    }
+}

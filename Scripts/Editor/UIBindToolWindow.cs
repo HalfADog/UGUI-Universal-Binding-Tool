@@ -39,11 +39,6 @@ public class UIBindToolWindow : EditorWindow
     private string m_NewComponentType = ""; // 新组件类型输入
     private string m_NewPrefix = ""; // 新前缀输入
 
-    // 测试相关
-    private string m_TestComponentType = ""; // 测试组件类型输入
-    private string m_TestObjectName = ""; // 测试对象名称输入
-    private string m_TestResult = ""; // 测试结果
-
     public GUID PrefabGuid => m_PrefabGuid;
     public static UIBindToolSettingsData SettingsData => s_SettingsData;
     public UIPanelBindings CurrentBindings
@@ -690,7 +685,10 @@ public class UIBindToolWindow : EditorWindow
         DrawGenerateUIBindScriptFolder(currentSettings);
         EditorGUILayout.Space(10);
 
-        DrawScriptCombinedMethod(currentSettings);
+        DrawGenerateUIMainScriptFolder(currentSettings);
+        EditorGUILayout.Space(10);
+
+        DrawTemplateTextFilePath(currentSettings);
         EditorGUILayout.Space(10);
 
         DrawBaseClassOrInterfaceNames(currentSettings);
@@ -740,14 +738,37 @@ public class UIBindToolWindow : EditorWindow
             var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
             if (currentSettings != null && currentSettings.autoOpenGeneratedScripts)
             {
-                string filePath = result.bindingScriptPath;
-                if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                // 打开绑定脚本
+                if (!string.IsNullOrEmpty(result.bindingScriptPath) && File.Exists(result.bindingScriptPath))
                 {
-                    // 打开生成的脚本文件
-                    UnityEditor.EditorUtility.OpenWithDefaultApp(filePath);
-                    Debug.Log($"已自动打开生成的脚本: {filePath}");
+                    UnityEditor.EditorUtility.OpenWithDefaultApp(result.bindingScriptPath);
+                    Debug.Log($"已自动打开生成的绑定脚本: {result.bindingScriptPath}");
+                }
+
+                // 打开主脚本
+                if (!string.IsNullOrEmpty(result.mainScriptPath) && File.Exists(result.mainScriptPath))
+                {
+                    UnityEditor.EditorUtility.OpenWithDefaultApp(result.mainScriptPath);
+                    Debug.Log($"已自动打开生成的主脚本: {result.mainScriptPath}");
                 }
             }
+
+            // 注册自动绑定任务
+            if (result.success && !string.IsNullOrEmpty(result.mainScriptPath) && result.targetPanel != null)
+            {
+                // 获取绑定数据路径
+                string bindingsDataPath = "";
+                if (CurrentBindings != null)
+                {
+                    bindingsDataPath = UIBindDataManager.GetBindingsAssetPath(CurrentBindings);
+                }
+
+                UIAutoBinder.RegisterBindingTask(result.targetPanel, result.mainScriptClassName, result.mainScriptPath, bindingsDataPath);
+                Debug.Log($"UIAutoBinder: 已注册自动绑定任务 - {result.mainScriptClassName}");
+            }
+
+            // 刷新AssetDatabase
+            AssetDatabase.Refresh();
         }
     }
 
@@ -877,62 +898,7 @@ public class UIBindToolWindow : EditorWindow
         EditorGUILayout.EndHorizontal();
     }
 
-    /// <summary>
-    /// 绘制脚本结合方式
-    /// </summary>
-    private void DrawScriptCombinedMethod(UIBindToolSettingsDataItem settings)
-    {
-        EditorGUILayout.LabelField("脚本结合方式:", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginHorizontal();
-
-        // 获取所有枚举值
-        var enumValues = System.Enum.GetValues(typeof(ScriptCombinedMethod));
-        int selectedIndex = 0;
-
-        // 找到当前选中的索引
-        for (int i = 0; i < enumValues.Length; i++)
-        {
-            if ((ScriptCombinedMethod)enumValues.GetValue(i) == settings.scriptCombinedMethod)
-            {
-                selectedIndex = i;
-                break;
-            }
-        }
-
-        // 绘制选项按钮
-        for (int i = 0; i < enumValues.Length; i++)
-        {
-            ScriptCombinedMethod method = (ScriptCombinedMethod)enumValues.GetValue(i);
-            bool isSelected = (i == selectedIndex);
-
-            // 设置按钮样式
-            if (isSelected)
-            {
-                GUI.backgroundColor = Color.cyan;
-            }
-
-            // 获取友好的显示名称
-            string displayName = GetScriptCombinedMethodDisplayName(method);
-
-            if (GUILayout.Button(displayName))
-            {
-                settings.scriptCombinedMethod = method;
-
-                // 如果在预览模式，更新预览文件名
-                if (m_IsPreviewMode)
-                {
-                    m_PreviewFileName = GetPreviewFileName();
-                }
-            }
-
-            // 恢复颜色
-            GUI.backgroundColor = Color.white;
-        }
-
-        EditorGUILayout.EndHorizontal();
-    }
-
+    
     /// <summary>
     /// 绘制UI绑定脚本文件夹
     /// </summary>
@@ -965,12 +931,12 @@ public class UIBindToolWindow : EditorWindow
     }
 
     /// <summary>
-    /// 绘制UI逻辑脚本文件夹
+    /// 绘制UI主脚本文件夹
     /// </summary>
-    private void DrawGenerateUILogicScriptFolder(UIBindToolSettingsDataItem settings)
+    private void DrawGenerateUIMainScriptFolder(UIBindToolSettingsDataItem settings)
     {
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("UI逻辑脚本文件夹:", GUILayout.Width(100));
+        EditorGUILayout.LabelField("UI主脚本文件夹:", GUILayout.Width(100));
 
         // 只读输入框
         EditorGUI.BeginDisabledGroup(true);
@@ -979,7 +945,7 @@ public class UIBindToolWindow : EditorWindow
 
         if (GUILayout.Button(EditorGUIUtility.IconContent("Folder On Icon"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
         {
-            string selectedPath = EditorUtility.OpenFolderPanel("选择UI逻辑脚本文件夹", "Assets", "");
+            string selectedPath = EditorUtility.OpenFolderPanel("选择UI主脚本文件夹", "Assets", "");
             if (!string.IsNullOrEmpty(selectedPath) && selectedPath.Contains("Assets"))
             {
                 int assetsIndex = selectedPath.IndexOf("Assets");
@@ -989,6 +955,52 @@ public class UIBindToolWindow : EditorWindow
                     relativePath = relativePath.Replace('\\', '/');
                     settings.generateUILogicScriptFolder = relativePath;
                 }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// 绘制模板文本文件路径
+    /// </summary>
+    private void DrawTemplateTextFilePath(UIBindToolSettingsDataItem settings)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("模板文本文件:", GUILayout.Width(100));
+
+        // 显示当前选择的文件路径，如果为空则显示提示
+        string displayPath = string.IsNullOrEmpty(settings.templateTextFilePath)
+            ? "未选择模板文件"
+            : settings.templateTextFilePath;
+
+        // 只读输入框
+        EditorGUI.BeginDisabledGroup(true);
+        EditorGUILayout.LabelField(displayPath, EditorStyles.textField);
+        EditorGUI.EndDisabledGroup();
+
+        // 文件选择按钮
+        if (GUILayout.Button(EditorGUIUtility.IconContent("Folder On Icon"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+        {
+            string selectedPath = EditorUtility.OpenFilePanel("选择模板文本文件", "Assets", "txt");
+            if (!string.IsNullOrEmpty(selectedPath) && selectedPath.Contains("Assets"))
+            {
+                int assetsIndex = selectedPath.IndexOf("Assets");
+                if (assetsIndex >= 0)
+                {
+                    string relativePath = selectedPath.Substring(assetsIndex);
+                    relativePath = relativePath.Replace('\\', '/');
+                    settings.templateTextFilePath = relativePath;
+                }
+            }
+        }
+
+        // 清除按钮
+        if (!string.IsNullOrEmpty(settings.templateTextFilePath))
+        {
+            if (GUILayout.Button(EditorGUIUtility.IconContent("TreeEditor.Trash"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
+            {
+                settings.templateTextFilePath = "";
             }
         }
 
@@ -1279,6 +1291,34 @@ public class UIBindToolWindow : EditorWindow
             return false;
         }
 
+        // 验证模板文本文件路径（可选）
+        if (!string.IsNullOrEmpty(settings.templateTextFilePath))
+        {
+            if (!settings.templateTextFilePath.StartsWith("Assets/"))
+            {
+                EditorUtility.DisplayDialog("验证错误", "模板文本文件路径必须以 'Assets/' 开头", "确定");
+                return false;
+            }
+
+            // 检查文件是否存在
+            if (!File.Exists(settings.templateTextFilePath))
+            {
+                int continueAnyway = EditorUtility.DisplayDialogComplex(
+                    "文件不存在",
+                    $"模板文本文件不存在：{settings.templateTextFilePath}\n\n是否继续保存？",
+                    "继续保存", "重新选择", "取消");
+                if (continueAnyway == 1) // 重新选择
+                {
+                    return false;
+                }
+                else if (continueAnyway == 2) // 取消
+                {
+                    return false;
+                }
+                // continueAnyway == 0，继续保存
+            }
+        }
+
         return true;
     }
 
@@ -1362,34 +1402,11 @@ public class UIBindToolWindow : EditorWindow
             className = char.ToUpper(className[0]) + className[1..];
         }
 
-        // 根据模式返回不同的文件名
-        switch (currentSettings.scriptCombinedMethod)
-        {
-            case ScriptCombinedMethod.BaseClassInherit:
-                return $"{className}Base.cs";
-            case ScriptCombinedMethod.PartialClass:
-                return $"{className}.Bind.cs";
-            case ScriptCombinedMethod.SingleScript:
-                return $"{className}.cs";
-            default:
-                return $"{className}.cs";
-        }
+        // 使用部分类模式
+        return $"{className}.Bind.cs";
     }
 
-    /// <summary>
-    /// 获取脚本结合方式的显示名称
-    /// </summary>
-    private string GetScriptCombinedMethodDisplayName(ScriptCombinedMethod method)
-    {
-        return method switch
-        {
-            ScriptCombinedMethod.BaseClassInherit => "基类继承",
-            ScriptCombinedMethod.PartialClass => "部分类",
-            ScriptCombinedMethod.SingleScript => "单脚本",
-            _ => method.ToString()
-        };
-    }
-
+    
     #endregion
 }
 

@@ -178,12 +178,12 @@ public class UIBindToolSettingsDataItem
     [Header("数据存储设置")]
     public string bindDataFolder = "Assets/UIBindData/Panel";
     [Header("代码生成设置")]
-    // Bind与Logic的结合方式
-    public ScriptCombinedMethod scriptCombinedMethod = ScriptCombinedMethod.PartialClass;
-    // 生成UI绑定脚本的文件夹路径
+      // 生成UI绑定脚本的文件夹路径
     public string generateUIBindScriptFolder = "Assets/Scripts/UIBind/Panel";
     // 生成UI逻辑脚本的文件夹路径
     public string generateUILogicScriptFolder = "Assets/Scripts/UILogic/Panel";
+    // 模板文本文件路径
+    public string templateTextFilePath = "";
     // 生成脚本时，基类或接口名称（逗号分隔）
     public string baseClassOrInterfaceNames = "";
     // 是否使用命名空间
@@ -214,14 +214,4 @@ public class ComponentPrefixMapping
         this.componentType = componentType;
         this.prefix = prefix;
     }
-}
-
-/// <summary>
-/// Bind与Logic的结合方式
-/// </summary>
-public enum ScriptCombinedMethod
-{
-    BaseClassInherit,//基类继承
-    PartialClass,//部分类
-    SingleScript //单脚本
 }

@@ -10,11 +10,12 @@ using UnityEngine;
 /// </summary>
 public class GenerationConfig
 {
-    public ScriptCombinedMethod combineMethod;
     public string namespaceStr;
     public string baseClassOrInterfaceNames;
     public bool useNamespace;
     public string uiBindScriptFolder;
+    public string uiMainScriptFolder;
+    public string templateTextFilePath;
 }
 
 /// <summary>
@@ -24,6 +25,9 @@ public struct GenerationResult
 {
     public bool success;
     public string bindingScriptPath;
+    public string mainScriptPath;
+    public GameObject targetPanel;
+    public string mainScriptClassName;
     public string errorMessage;
 }
 
@@ -63,15 +67,17 @@ public static class UIBindScriptGenerator
             }
 
             // 3. 生成代码文件
-            EditorUtility.DisplayProgressBar("生成脚本", "生成代码文件...", 0.2f);
-            string bindingPath = GenerateScriptFiles(bindings, config);
-            result.bindingScriptPath = bindingPath;
+            GenerationResult generationResult = GenerateScriptFiles(bindings, config);
+            result.bindingScriptPath = generationResult.bindingScriptPath;
+            result.mainScriptPath = generationResult.mainScriptPath;
+            result.mainScriptClassName = generationResult.mainScriptClassName;
 
-            // 4. 刷新AssetDatabase
-            AssetDatabase.Refresh();
-            EditorUtility.ClearProgressBar();
+            // 获取目标面板对象
+            GameObject targetPanel = GetRootPanelObject(bindings);
+            result.targetPanel = targetPanel;
 
-            result.success = true;
+            result.success = generationResult.success;
+            result.errorMessage = generationResult.errorMessage;
         }
         catch (Exception e)
         {
@@ -98,11 +104,12 @@ public static class UIBindScriptGenerator
 
         var config = new GenerationConfig
         {
-            combineMethod = settings.scriptCombinedMethod,
             namespaceStr = settings.scriptNamespace,
             useNamespace = settings.useNamespace,
             baseClassOrInterfaceNames = settings.baseClassOrInterfaceNames,
             uiBindScriptFolder = settings.generateUIBindScriptFolder,
+            uiMainScriptFolder = settings.generateUILogicScriptFolder,
+            templateTextFilePath = settings.templateTextFilePath,
         };
 
         return config;
@@ -142,19 +149,51 @@ public static class UIBindScriptGenerator
     /// </summary>
     /// <param name="bindings">绑定数据</param>
     /// <param name="config">配置</param>
-    /// <returns>生成的文件路径</returns>
-    private static string GenerateScriptFiles(UIPanelBindings bindings, GenerationConfig config)
+    /// <returns>生成结果，包含所有生成文件的路径</returns>
+    private static GenerationResult GenerateScriptFiles(UIPanelBindings bindings, GenerationConfig config)
     {
-        // 确保文件夹存在
-        EnsureFolderExists(config.uiBindScriptFolder);
+        var result = new GenerationResult { success = false };
 
-        // 生成绑定脚本
-        string bindingCode = GenerateBindingCode(bindings, config);
-        string bindingPath = Path.Combine(config.uiBindScriptFolder, GetBindingScriptName(bindings, config));
-        File.WriteAllText(bindingPath, bindingCode);
-        Debug.Log($"生成绑定脚本: {bindingPath}");
+        try
+        {
+            // 确保文件夹存在
+            EnsureFolderExists(config.uiBindScriptFolder);
+            if (!string.IsNullOrEmpty(config.uiMainScriptFolder))
+            {
+                EnsureFolderExists(config.uiMainScriptFolder);
+            }
 
-        return bindingPath;
+            // 生成绑定脚本
+            string bindingCode = GenerateBindingCode(bindings, config);
+            string bindingPath = Path.Combine(config.uiBindScriptFolder, GetBindingScriptName(bindings, config));
+            File.WriteAllText(bindingPath, bindingCode);
+            result.bindingScriptPath = bindingPath;
+            Debug.Log($"生成绑定脚本: {bindingPath}");
+
+            // 生成主脚本（如果指定了模板文件）
+            if (!string.IsNullOrEmpty(config.templateTextFilePath) &&
+                !string.IsNullOrEmpty(config.uiMainScriptFolder))
+            {
+                string mainScriptCode = GenerateMainScriptFromTemplate(bindings, config);
+                if (!string.IsNullOrEmpty(mainScriptCode))
+                {
+                    string mainScriptPath = Path.Combine(config.uiMainScriptFolder, GetMainScriptName(bindings));
+                    File.WriteAllText(mainScriptPath, mainScriptCode);
+                    result.mainScriptPath = mainScriptPath;
+                    result.mainScriptClassName = GetBindingClassName(bindings);
+                    Debug.Log($"生成主脚本: {mainScriptPath}");
+                }
+            }
+
+            result.success = true;
+        }
+        catch (Exception e)
+        {
+            result.errorMessage = $"生成脚本时发生错误: {e.Message}";
+            Debug.LogError($"生成脚本失败: {e}");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -165,17 +204,7 @@ public static class UIBindScriptGenerator
     /// <returns>生成的代码</returns>
     public static string GenerateBindingCode(UIPanelBindings bindings, GenerationConfig config)
     {
-        switch (config.combineMethod)
-        {
-            case ScriptCombinedMethod.BaseClassInherit:
-                return GenerateBaseClassCode(bindings, config);
-            case ScriptCombinedMethod.PartialClass:
-                return GeneratePartialClassCode(bindings, config); // 绑定部分
-            case ScriptCombinedMethod.SingleScript:
-                return GenerateSingleScriptCode(bindings, config); // 单脚本，包含全部内容
-            default:
-                return GenerateBaseClassCode(bindings, config);
-        }
+        return GeneratePartialClassCode(bindings, config);
     }
 
     #endregion
@@ -216,10 +245,6 @@ public static class UIBindScriptGenerator
     {
         var code = new System.Text.StringBuilder();
 
-        // 核心命名空间（总是包含）
-        code.AppendLine("using UnityEngine;");
-        code.AppendLine("using UnityEngine.UI;");
-
         // 收集并添加动态命名空间
         var namespaces = CollectNamespaces(bindings);
         if (namespaces.Count > 0)
@@ -239,66 +264,7 @@ public static class UIBindScriptGenerator
 
     #region 代码模板生成
 
-    /// <summary>
-    /// 生成基类代码
-    /// </summary>
-    private static string GenerateBaseClassCode(UIPanelBindings bindings, GenerationConfig config)
-    {
-        var code = new System.Text.StringBuilder();
-        bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
-
-        // 动态生成using语句
-        string usingStatements = GenerateUsingStatements(bindings);
-        code.Append(usingStatements);
-
-        // 命名空间声明
-        string namespaceDecl = GetNamespaceDeclaration(config);
-        if (hasNamespace)
-        {
-            code.AppendLine(namespaceDecl);
-            code.AppendLine("{");
-        }
-
-        // 类声明
-        string classIndent = hasNamespace ? GetIndent(1) : "";
-        code.AppendLine($"{classIndent}/// <summary>");
-        code.AppendLine($"{classIndent}/// {bindings.panelName} UI绑定基类（自动生成，请勿手动修改）");
-        code.AppendLine($"{classIndent}/// </summary>");
-        code.AppendLine($"{classIndent}public class {GetBindingClassName(bindings)}Base : MonoBehaviour");
-        code.AppendLine($"{classIndent}{{");
-
-        // 字段声明
-        string memberIndent = hasNamespace ? GetIndent(2) : "    ";
-        code.AppendLine($"{memberIndent}[Header(\"UI Bindings\")]");
-        string bindingFields = GenerateBindingFields(bindings, "protected");
-        code.AppendLine(AddIndentToMultiLine(bindingFields, hasNamespace ? 1 : 0));
-
-        // 初始化方法
-        code.AppendLine();
-        code.AppendLine($"{memberIndent}protected virtual void Awake()");
-        code.AppendLine($"{memberIndent}{{");
-        code.AppendLine($"{memberIndent}    InitializeBindings();");
-        code.AppendLine($"{memberIndent}}}");
-
-        // 绑定初始化方法
-        code.AppendLine();
-        code.AppendLine($"{memberIndent}protected void InitializeBindings()");
-        code.AppendLine($"{memberIndent}{{");
-        string initCode = GenerateInitializationCode(bindings);
-        code.AppendLine(AddIndentToMultiLine(initCode, hasNamespace ? 1 : 0));
-        code.AppendLine($"{memberIndent}}}");
-
-        code.AppendLine($"{classIndent}}}");
-
-        // 结束命名空间
-        if (hasNamespace)
-        {
-            code.AppendLine("}");
-        }
-
-        return code.ToString();
-    }
-
+    
     /// <summary>
     /// 生成部分类代码
     /// </summary>
@@ -324,15 +290,14 @@ public static class UIBindScriptGenerator
         string className = GetBindingClassName(bindings);
 
         code.AppendLine($"{classIndent}/// <summary>");
-        code.AppendLine($"{classIndent}/// {bindings.panelName} UI绑定部分（自动生成）");
+        code.AppendLine($"{classIndent}/// {bindings.panelName} UI字段定义（自动生成）");
         code.AppendLine($"{classIndent}/// </summary>");
 
         // 构建类声明行
         string classDeclaration = $"{classIndent}public partial class {className}";
-        string baseClassDecl = GetBaseClassDeclaration(config);
-        if (!string.IsNullOrEmpty(baseClassDecl))
+        if (!string.IsNullOrEmpty(config.baseClassOrInterfaceNames))
         {
-            classDeclaration += $" : {baseClassDecl}";
+            classDeclaration += $" : {config.baseClassOrInterfaceNames}";
         }
         code.AppendLine(classDeclaration);
         code.AppendLine($"{classIndent}{{");
@@ -342,21 +307,6 @@ public static class UIBindScriptGenerator
         code.AppendLine($"{memberIndent}[Header(\"UI Bindings\")]");
         string bindingFields = GenerateBindingFields(bindings, "private");
         code.AppendLine(AddIndentToMultiLine(bindingFields, hasNamespace ? 1 : 0));
-        code.AppendLine();
-
-        // 初始化方法
-        code.AppendLine($"{memberIndent}private void Awake()");
-        code.AppendLine($"{memberIndent}{{");
-        code.AppendLine($"{memberIndent}    InitializeBindings();");
-        code.AppendLine($"{memberIndent}}}");
-        code.AppendLine();
-
-        // 绑定初始化方法
-        code.AppendLine($"{memberIndent}private void InitializeBindings()");
-        code.AppendLine($"{memberIndent}{{");
-        string initCode = GenerateInitializationCode(bindings);
-        code.AppendLine(AddIndentToMultiLine(initCode, hasNamespace ? 1 : 0));
-        code.AppendLine($"{memberIndent}}}");
 
         code.AppendLine($"{classIndent}}}");
 
@@ -369,82 +319,7 @@ public static class UIBindScriptGenerator
         return code.ToString();
     }
 
-    /// <summary>
-    /// 生成单脚本代码（包含字段和事件处理的完整脚本）
-    /// </summary>
-    private static string GenerateSingleScriptCode(UIPanelBindings bindings, GenerationConfig config)
-    {
-        var code = new System.Text.StringBuilder();
-        bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
-
-        // 动态生成using语句
-        string usingStatements = GenerateUsingStatements(bindings);
-        code.Append(usingStatements);
-
-        // 命名空间声明
-        string namespaceDecl = GetNamespaceDeclaration(config);
-        if (hasNamespace)
-        {
-            code.AppendLine(namespaceDecl);
-            code.AppendLine("{");
-        }
-
-        // 类声明
-        string classIndent = hasNamespace ? GetIndent(1) : "";
-        string baseClassDecl = GetBaseClassDeclaration(config);
-        string classDecl = string.IsNullOrEmpty(baseClassDecl) ? "" : $" : {baseClassDecl}";
-
-        code.AppendLine($"{classIndent}/// <summary>");
-        code.AppendLine($"{classIndent}/// {bindings.panelName} UI单脚本类（自动生成，包含字段和事件处理）");
-        code.AppendLine($"{classIndent}/// </summary>");
-        code.AppendLine($"{classIndent}public class {GetBindingClassName(bindings)}{classDecl}");
-        code.AppendLine($"{classIndent}{{");
-
-        // 字段声明
-        string memberIndent = hasNamespace ? GetIndent(2) : "    ";
-        code.AppendLine($"{memberIndent}[Header(\"UI Bindings\")]");
-        string bindingFields = GenerateBindingFields(bindings, "private");
-        code.AppendLine(AddIndentToMultiLine(bindingFields, hasNamespace ? 1 : 0));
-        code.AppendLine();
-
-        // Start方法
-        code.AppendLine($"{memberIndent}private void Start()");
-        code.AppendLine($"{memberIndent}{{");
-        code.AppendLine($"{memberIndent}    InitializeBindings();");
-        code.AppendLine($"{memberIndent}    SetupEventListeners();");
-        code.AppendLine($"{memberIndent}}}");
-        code.AppendLine();
-
-        // 绑定初始化方法
-        code.AppendLine($"{memberIndent}private void InitializeBindings()");
-        code.AppendLine($"{memberIndent}{{");
-        string initCode = GenerateInitializationCode(bindings);
-        code.AppendLine(AddIndentToMultiLine(initCode, hasNamespace ? 1 : 0));
-        code.AppendLine($"{memberIndent}}}");
-        code.AppendLine();
-
-        // 事件绑定方法
-        code.AppendLine($"{memberIndent}private void SetupEventListeners()");
-        code.AppendLine($"{memberIndent}{{");
-        string eventCode = GenerateEventBindingCode(bindings);
-        code.AppendLine(AddIndentToMultiLine(eventCode, hasNamespace ? 1 : 0));
-        code.AppendLine($"{memberIndent}}}");
-        code.AppendLine();
-
-        // 事件处理方法
-        string handlerCode = GenerateEventHandlers(bindings);
-        code.AppendLine(AddIndentToMultiLine(handlerCode, hasNamespace ? 1 : 0));
-        code.AppendLine($"{classIndent}}}");
-
-        // 结束命名空间
-        if (hasNamespace)
-        {
-            code.AppendLine("}");
-        }
-
-        return code.ToString();
-    }
-
+    
     #endregion
 
     #region 代码片段生成
@@ -475,221 +350,8 @@ public static class UIBindScriptGenerator
         return code.ToString();
     }
 
-    /// <summary>
-    /// 生成初始化代码
-    /// </summary>
-    /// <param name="bindings">绑定数据</param>
-    /// <returns>初始化代码</returns>
-    private static string GenerateInitializationCode(UIPanelBindings bindings)
-    {
-        var code = new System.Text.StringBuilder();
-
-        // 使用确保变量名唯一的绑定列表
-        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
-
-        foreach (var binding in uniqueBindings)
-        {
-            // 优先使用相对路径，如果没有相对路径则使用绝对路径并转换
-            string path = "";
-            if (!string.IsNullOrEmpty(binding.targetObjectRelativePath))
-            {
-                // 使用存储的相对路径
-                path = binding.targetObjectRelativePath;
-
-                // 如果相对路径是[ROOT]标识，说明目标对象就是面板根对象
-                if (path == "[ROOT]")
-                {
-                    path = ""; // 设置为空，让后面的逻辑处理根对象
-                }
-            }
-            else if (!string.IsNullOrEmpty(binding.targetObjectFullPathInScene))
-            {
-                // 使用绝对路径并转换为相对路径
-                path = binding.targetObjectFullPathInScene;
-                if (path.StartsWith("/"))
-                {
-                    // 移除开头的'/'，使其成为相对路径
-                    path = path.TrimStart('/');
-                }
-
-                // 如果路径包含面板名称，需要移除面板名称部分
-                if (!string.IsNullOrEmpty(bindings.panelName) && path.Contains(bindings.panelName))
-                {
-                    // 找到面板名称后的路径部分
-                    int panelIndex = path.IndexOf(bindings.panelName);
-                    if (panelIndex >= 0)
-                    {
-                        path = path.Substring(panelIndex + bindings.panelName.Length).TrimStart('/');
-                    }
-                }
-            }
-
-            if (!string.IsNullOrEmpty(path))
-            {
-                code.AppendLine($"        {binding.variableName} = transform.Find(\"{path}\").GetComponent<{binding.shortTypeName}>();");
-
-                // 添加错误检查
-                code.AppendLine($"        if ({binding.variableName} == null)");
-                code.AppendLine($"        {{");
-                code.AppendLine($"            Debug.LogError($\"Failed to find component {binding.shortTypeName} at path '{path}'\");");
-                code.AppendLine($"        }}");
-            }
-            else
-            {
-                // 如果路径为空，说明该组件就是面板根对象，直接使用GetComponent
-                code.AppendLine($"        {binding.variableName} = GetComponent<{binding.shortTypeName}>();");
-
-                // 添加错误检查
-                code.AppendLine($"        if ({binding.variableName} == null)");
-                code.AppendLine($"        {{");
-                code.AppendLine($"            Debug.LogError($\"Failed to find component {binding.shortTypeName} on the root GameObject\");");
-                code.AppendLine($"        }}");
-            }
-        }
-        return code.ToString();
-    }
-
-    /// <summary>
-    /// 生成事件绑定代码
-    /// </summary>
-    /// <param name="bindings">绑定数据</param>
-    /// <returns>事件绑定代码</returns>
-    private static string GenerateEventBindingCode(UIPanelBindings bindings)
-    {
-        var code = new System.Text.StringBuilder();
-        var generatedHandlers = new HashSet<string>();
-
-        // 使用确保变量名唯一的绑定列表
-        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
-
-        foreach (var binding in uniqueBindings)
-        {
-            string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
-            if (generatedHandlers.Contains(methodName))
-                continue;
-
-            generatedHandlers.Add(methodName);
-
-            switch (binding.shortTypeName)
-            {
-                case "Button":
-                    code.AppendLine($"        if ({binding.variableName} != null)");
-                    code.AppendLine($"        {{");
-                    code.AppendLine($"            {binding.variableName}.onClick.AddListener({methodName});");
-                    code.AppendLine($"        }}");
-                    break;
-
-                case "Toggle":
-                    code.AppendLine($"        if ({binding.variableName} != null)");
-                    code.AppendLine($"        {{");
-                    code.AppendLine($"            {binding.variableName}.onValueChanged.AddListener({methodName});");
-                    code.AppendLine($"        }}");
-                    break;
-
-                case "InputField":
-                    code.AppendLine($"        if ({binding.variableName} != null)");
-                    code.AppendLine($"        {{");
-                    code.AppendLine($"            {binding.variableName}.onEndEdit.AddListener({methodName});");
-                    code.AppendLine($"        }}");
-                    break;
-
-                case "Slider":
-                case "Scrollbar":
-                    code.AppendLine($"        if ({binding.variableName} != null)");
-                    code.AppendLine($"        {{");
-                    code.AppendLine($"            {binding.variableName}.onValueChanged.AddListener({methodName});");
-                    code.AppendLine($"        }}");
-                    break;
-
-                case "Dropdown":
-                    code.AppendLine($"        if ({binding.variableName} != null)");
-                    code.AppendLine($"        {{");
-                    code.AppendLine($"            {binding.variableName}.onValueChanged.AddListener({methodName});");
-                    code.AppendLine($"        }}");
-                    break;
-            }
-        }
-
-        return code.ToString();
-    }
-
-    /// <summary>
-    /// 生成事件处理方法
-    /// </summary>
-    /// <param name="bindings">绑定数据</param>
-    /// <returns>事件处理方法代码</returns>
-    private static string GenerateEventHandlers(UIPanelBindings bindings)
-    {
-        var code = new System.Text.StringBuilder();
-        var generatedHandlers = new HashSet<string>();
-
-        // 使用确保变量名唯一的绑定列表
-        var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
-
-        foreach (var binding in uniqueBindings)
-        {
-            string methodName = GenerateSafeEventMethodName(binding.variableName, binding.shortTypeName);
-
-            // 避免重复生成相同的方法
-            if (generatedHandlers.Contains(methodName))
-                continue;
-
-            generatedHandlers.Add(methodName);
-
-            switch (binding.shortTypeName)
-            {
-                case "Button":
-                    code.AppendLine($"    private void {methodName}()");
-                    code.AppendLine("    {");
-                    code.AppendLine($"        // TODO: 处理 {binding.variableName} 点击事件");
-                    code.AppendLine($"        Debug.Log(\"{binding.variableName} clicked\");");
-                    code.AppendLine("    }");
-                    code.AppendLine();
-                    break;
-
-                case "Toggle":
-                    code.AppendLine($"    private void {methodName}(bool isOn)");
-                    code.AppendLine("    {");
-                    code.AppendLine($"        // TODO: 处理 {binding.variableName} 切换事件");
-                    code.AppendLine($"        Debug.Log($\"{binding.variableName} toggled: {{isOn}}\");");
-                    code.AppendLine("    }");
-                    code.AppendLine();
-                    break;
-
-                case "InputField":
-                    code.AppendLine($"    private void {methodName}(string text)");
-                    code.AppendLine("    {");
-                    code.AppendLine($"        // TODO: 处理 {binding.variableName} 输入结束事件");
-                    code.AppendLine($"        Debug.Log($\"{binding.variableName} input ended: {{text}}\");");
-                    code.AppendLine("    }");
-                    code.AppendLine();
-                    break;
-
-                case "Slider":
-                case "Scrollbar":
-                    code.AppendLine($"    private void {methodName}(float value)");
-                    code.AppendLine("    {");
-                    code.AppendLine($"        // TODO: 处理 {binding.variableName} 数值变化事件");
-                    code.AppendLine($"        Debug.Log($\"{binding.variableName} value changed: {{value}}\");");
-                    code.AppendLine("    }");
-                    code.AppendLine();
-                    break;
-
-                case "Dropdown":
-                    code.AppendLine($"    private void {methodName}(int index)");
-                    code.AppendLine("    {");
-                    code.AppendLine($"        // TODO: 处理 {binding.variableName} 选择变化事件");
-                    code.AppendLine($"        Debug.Log($\"{binding.variableName} option changed: {{index}}\");");
-                    code.AppendLine("    }");
-                    code.AppendLine();
-                    break;
-            }
-            //code.AppendLine();
-        }
-
-        return code.ToString();
-    }
-
+    
+    
     #endregion
 
     #region 工具方法
@@ -706,16 +368,7 @@ public static class UIBindScriptGenerator
             : "";
     }
 
-    /// <summary>
-    /// 获取基类声明
-    /// </summary>
-    private static string GetBaseClassDeclaration(GenerationConfig config)
-    {
-        return !string.IsNullOrEmpty(config.baseClassOrInterfaceNames)
-            ? config.baseClassOrInterfaceNames
-            : "";
-    }
-
+    
     /// <summary>
     /// 获取绑定类名
     /// </summary>
@@ -741,42 +394,10 @@ public static class UIBindScriptGenerator
     private static string GetBindingScriptName(UIPanelBindings bindings, GenerationConfig config)
     {
         string className = GetBindingClassName(bindings);
-
-        switch (config.combineMethod)
-        {
-            case ScriptCombinedMethod.BaseClassInherit:
-                return $"{className}Base.cs";
-            case ScriptCombinedMethod.PartialClass:
-                return $"{className}.Bind.cs";
-            case ScriptCombinedMethod.SingleScript:
-                return $"{className}.cs";
-            default:
-                return $"{className}.cs";
-        }
+        return $"{className}.Bind.cs";
     }
 
-    /// <summary>
-    /// 生成安全的事件方法名
-    /// 格式：On{对象名称}{事件类型}
-    /// </summary>
-    private static string GenerateSafeEventMethodName(string variableName, string componentType)
-    {
-        string methodName = "On" + variableName;
-
-        // 根据组件类型添加事件类型后缀
-        methodName += componentType switch
-        {
-            "Button" => "Click",
-            "Toggle" => "ValueChanged",
-            "InputField" => "EndEdit",
-            "Slider" or "Scrollbar" => "ValueChanged",
-            "Dropdown" => "ValueChanged",
-            _ => "Event"
-        };
-
-        return methodName;
-    }
-
+    
     /// <summary>
     /// 获取缩进字符串
     /// </summary>
@@ -879,6 +500,71 @@ public static class UIBindScriptGenerator
         }
 
         return uniqueBindings;
+    }
+
+    /// <summary>
+    /// 根据模板生成主脚本代码
+    /// </summary>
+    /// <param name="bindings">绑定数据</param>
+    /// <param name="config">配置</param>
+    /// <returns>生成的代码</returns>
+    private static string GenerateMainScriptFromTemplate(UIPanelBindings bindings, GenerationConfig config)
+    {
+        if (string.IsNullOrEmpty(config.templateTextFilePath))
+        {
+            Debug.LogWarning("未指定模板文件，无法生成主脚本");
+            return null;
+        }
+
+        try
+        {
+            // 读取模板文件
+            string templateContent = File.ReadAllText(config.templateTextFilePath);
+
+            // 获取类名
+            string className = GetBindingClassName(bindings);
+
+            // 替换占位符
+            string generatedCode = templateContent.Replace("<ClassName>", className);
+
+            return generatedCode;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"读取模板文件失败: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 获取主脚本文件名
+    /// </summary>
+    /// <param name="bindings">绑定数据</param>
+    /// <returns>主脚本文件名</returns>
+    private static string GetMainScriptName(UIPanelBindings bindings)
+    {
+        string className = GetBindingClassName(bindings);
+        return $"{className}.cs";
+    }
+
+    /// <summary>
+    /// 获取根面板游戏对象
+    /// </summary>
+    /// <param name="bindings">绑定数据</param>
+    /// <returns>根面板游戏对象</returns>
+    private static GameObject GetRootPanelObject(UIPanelBindings bindings)
+    {
+        if (string.IsNullOrEmpty(bindings.panelPrefabGUID))
+            return null;
+
+        // 通过GUID查找预制体
+        string assetPath = AssetDatabase.GUIDToAssetPath(bindings.panelPrefabGUID);
+        if (string.IsNullOrEmpty(assetPath))
+            return null;
+
+        // 加载预制体
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+        return prefab;
     }
 
     #endregion
