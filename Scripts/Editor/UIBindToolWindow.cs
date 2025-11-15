@@ -1042,6 +1042,7 @@ public class UIBindToolWindow : EditorWindow
                     string relativePath = selectedPath.Substring(assetsIndex);
                     relativePath = relativePath.Replace('\\', '/');
                     settings.templateTextFilePath = relativePath;
+                    settings.UpdateInfoFormTemplateTextFile();
                 }
             }
         }
@@ -1052,6 +1053,7 @@ public class UIBindToolWindow : EditorWindow
             if (GUILayout.Button(EditorGUIUtility.IconContent("TreeEditor.Trash"), GUILayout.Width(25), GUILayout.Height(EditorGUIUtility.singleLineHeight)))
             {
                 settings.templateTextFilePath = "";
+                settings.baseClassOrInterfaceNames = "";
             }
         }
 
@@ -1065,11 +1067,7 @@ public class UIBindToolWindow : EditorWindow
     {
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("基类或接口名称:", GUILayout.Width(120));
-        string newValue = EditorGUILayout.TextField(settings.baseClassOrInterfaceNames);
-        if (newValue != settings.baseClassOrInterfaceNames)
-        {
-            settings.baseClassOrInterfaceNames = newValue;
-        }
+        EditorGUILayout.LabelField(settings.baseClassOrInterfaceNames);
         EditorGUILayout.EndHorizontal();
     }
 
@@ -1459,9 +1457,8 @@ public class UIBindToolWindow : EditorWindow
 
         // 使用部分类模式
         return $"{className}.Bind.cs";
-    }
+    }   
 
-    
     #endregion
 }
 

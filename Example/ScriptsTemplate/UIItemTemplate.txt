@@ -1,16 +1,10 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
-public partial class <ClassName> : MonoBehaviour
+public partial class <ClassName> : UIItemBase,IPointerEnterHandler, IUIObject
 {
-    void Awake()
-    {
 
-    }
-
-    void OnEnable()
-    {
-        
-    }
+    public bool IsPanel => false;
 
     void Start()
     {
@@ -19,15 +13,10 @@ public partial class <ClassName> : MonoBehaviour
 
     void Update()
     {
-
+        
     }
 
-    void LateUpdate()
-    {
-
-    }
-
-    void OnDisable()
+    public void OnPointerEnter(PointerEventData eventData)
     {
         
     }

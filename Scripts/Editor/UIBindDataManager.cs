@@ -33,6 +33,7 @@ public class UIBindDataManager
     public static void SetCurrentSettingsItem(UIBindToolSettingsDataItem settingsItem)
     {
         s_CurrentSettingsItem = settingsItem;
+        s_CurrentSettingsItem?.UpdateInfoFormTemplateTextFile();
         // 更新最后选择的设置项名称
         if (s_SettingsDataContainer != null && settingsItem != null)
         {

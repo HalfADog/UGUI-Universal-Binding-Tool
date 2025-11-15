@@ -11,9 +11,10 @@ using UnityEngine;
 /// </summary>
 public class GenerationConfig
 {
-    public string namespaceStr;
     public string baseClassOrInterfaceNames;
+    public List<string> mainUsingNamespaces;
     public bool useNamespace;
+    public string namespaceStr;
     public string uiBindScriptFolder;
     public string uiMainScriptFolder;
     public string templateTextFilePath;
@@ -108,6 +109,7 @@ public static class UIBindScriptGenerator
             namespaceStr = settings.scriptNamespace,
             useNamespace = settings.useNamespace,
             baseClassOrInterfaceNames = settings.baseClassOrInterfaceNames,
+            mainUsingNamespaces = settings.mainUsingNamespaces,
             uiBindScriptFolder = settings.generateUIBindScriptFolder,
             uiMainScriptFolder = settings.generateUILogicScriptFolder,
             templateTextFilePath = settings.templateTextFilePath,
@@ -243,7 +245,6 @@ public static class UIBindScriptGenerator
                         if (totalReplacements > 0)
                         {
                             File.WriteAllText(mainScriptPath, mainScriptContent);
-                            // Debug.Log($"[UIBindScriptGenerator] 更新主脚本完成，共替换 {totalReplacements} 处");
                         }
                     }
                     catch (Exception e)
@@ -284,12 +285,15 @@ public static class UIBindScriptGenerator
     /// </summary>
     /// <param name="bindings">绑定数据</param>
     /// <returns>去重后的命名空间列表</returns>
-    private static HashSet<string> CollectNamespaces(UIPanelBindings bindings)
+    private static HashSet<string> CollectNamespaces(UIPanelBindings bindings,GenerationConfig config)
     {
         var namespaces = new HashSet<string>();
         if (bindings == null || bindings.bindings == null)
             return namespaces;
-        namespaces.Add("UnityEngine");
+        foreach(string item in config.mainUsingNamespaces)
+        {
+            namespaces.Add(item);
+        }
         // 使用确保变量名唯一的绑定列表
         var uniqueBindings = EnsureUniqueVariableNames(bindings.bindings);
 
@@ -308,11 +312,11 @@ public static class UIBindScriptGenerator
     /// </summary>
     /// <param name="bindings">绑定数据</param>
     /// <returns>using语句代码</returns>
-    private static string GenerateUsingStatements(UIPanelBindings bindings)
+    private static string GenerateUsingStatements(UIPanelBindings bindings,GenerationConfig config)
     {
         var code = new System.Text.StringBuilder();
         // 收集并添加动态命名空间
-        var namespaces = CollectNamespaces(bindings);
+        var namespaces = CollectNamespaces(bindings,config);
         if (namespaces.Count > 0)
         {
             // 排序命名空间以确保输出的一致性
@@ -340,7 +344,7 @@ public static class UIBindScriptGenerator
         bool hasNamespace = !string.IsNullOrEmpty(GetNamespaceDeclaration(config));
 
         // 动态生成using语句
-        string usingStatements = GenerateUsingStatements(bindings);
+        string usingStatements = GenerateUsingStatements(bindings,config);
         code.Append(usingStatements);
 
         // 命名空间声明

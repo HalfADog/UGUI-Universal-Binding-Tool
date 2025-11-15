@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 
 /// <summary>
 /// UI绑定工具设置数据
@@ -106,12 +107,72 @@ public class UIBindToolSettingsDataItem
     public string templateTextFilePath = "";
     // 生成脚本时，基类或接口名称（逗号分隔）
     public string baseClassOrInterfaceNames = "";
+    // 主脚本中引用的命名空间
+    public List<string> mainUsingNamespaces;
     // 是否使用命名空间
     public bool useNamespace = false;
     // 脚本命名空间
     public string scriptNamespace = "";
     // 生成脚本后是否自动打开
     public bool autoOpenGeneratedScripts = false;
+
+    public void UpdateInfoFormTemplateTextFile()
+    {
+        if(string.IsNullOrEmpty(templateTextFilePath))
+        {
+            Debug.Log("未配置模版文件");
+            return;
+        }
+        TextAsset textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(templateTextFilePath);
+        if(textAsset)
+        {
+            //读取类模版的命名空间引用
+            UpdateTemplateFileUsingNamespaces(textAsset.text);
+            // 读取类模版的基类
+            UpdateTemplateFileBaseClassName(textAsset.text);
+        }
+    }
+
+    /// <summary>
+    /// 获取模版文件中基类的名称
+    /// </summary>
+    /// <param name="templateFileString"></param>
+    /// <returns></returns>
+    private void UpdateTemplateFileBaseClassName(string templateFileString)
+    {
+        baseClassOrInterfaceNames = "";
+        if(string.IsNullOrEmpty(templateFileString))
+            return;
+        string[] lines = templateFileString.Split('\n');
+        foreach(string line in lines)
+        {
+            if(line.Contains("<ClassName>") && line.Contains(':'))
+            {
+                var baseClassName = line.Split(':')[1].Split(',')[0];
+                baseClassOrInterfaceNames = baseClassName.Replace(" ","");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取模版文件中所有的命名空间
+    /// </summary>
+    /// <param name="templateFileString"></param>
+    private void UpdateTemplateFileUsingNamespaces(string templateFileString)
+    {
+        if(mainUsingNamespaces==null)
+            mainUsingNamespaces = new List<string>();
+        mainUsingNamespaces.Clear();
+        string[] lines = templateFileString.Split('\n');
+        foreach(string line in lines)
+        {
+            if(line.Contains("using") && line.Contains(';'))
+            {
+                var item = line.Split(';')[0].Replace("using","").Replace(" ","");
+                mainUsingNamespaces.Add(item);
+            }
+        }
+    }
 }
 
 /// <summary>
