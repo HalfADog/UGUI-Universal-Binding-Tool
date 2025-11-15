@@ -33,7 +33,7 @@ public class UIPanelBindings : ScriptableObject
             bindings.Add(binding);
             lastModifiedTime = DateTime.Now;
 
-            Debug.Log($"[UIPanelBindings] 添加绑定: {binding.variableName}");
+            // Debug.Log($"[UIPanelBindings] 添加绑定: {binding.variableName}");
         }
     }
 
@@ -52,34 +52,10 @@ public class UIPanelBindings : ScriptableObject
         if (removed)
         {
             lastModifiedTime = DateTime.Now;
-            Debug.Log($"[UIPanelBindings] 移除绑定: {binding.variableName}");
+            // Debug.Log($"[UIPanelBindings] 移除绑定: {binding.variableName}");
         }
 
         return removed;
-    }
-
-    /// <summary>
-    /// 移除指定对象的绑定
-    /// </summary>
-    public int RemoveBindingsForObject(GameObject targetObject)
-    {
-        if (targetObject == null)
-            return 0;
-
-        // 记录撤销操作
-        int countToRemove = bindings.Count(b => b != null && b.GetTargetObject() == targetObject);
-        if (countToRemove > 0)
-        {
-            UndoHelper.RecordBindings(this, UndoHelper.GetDeleteAllUndoName(targetObject, countToRemove));
-        }
-
-        int count = bindings.RemoveAll(b => b != null && b.GetTargetObject() == targetObject);
-        if (count > 0)
-        {
-            lastModifiedTime = DateTime.Now;
-            Debug.Log($"[UIPanelBindings] 移除 {targetObject.name} 的 {count} 个绑定");
-        }
-        return count;
     }
 
     /// <summary>
@@ -91,24 +67,6 @@ public class UIPanelBindings : ScriptableObject
             return new List<UIBindItem>();
 
         return bindings.FindAll(b => b != null && b.GetTargetObject() == targetObject);
-    }
-
-    /// <summary>
-    /// 获取指定对象的指定组件类型的绑定项
-    /// </summary>
-    public UIBindItem GetBindingForObjectAndComponent(GameObject targetObject, Type componentType)
-    {
-        if (targetObject == null || componentType == null)
-            return null;
-
-        string componentTypeName = componentType.FullName;
-        if (string.IsNullOrEmpty(componentTypeName))
-            return null;
-
-        return bindings.Find(b =>
-            b != null &&
-            b.GetTargetObject() == targetObject &&
-            b.componentTypeName == componentTypeName);
     }
 
     /// <summary>
@@ -151,7 +109,7 @@ public class UIPanelBindings : ScriptableObject
             bindings[index] = binding;
             lastModifiedTime = DateTime.Now;
 
-            Debug.Log($"[UIPanelBindings] 更新绑定: {binding.variableName}");
+            // Debug.Log($"[UIPanelBindings] 更新绑定: {binding.variableName}");
         }
     }
 
@@ -201,30 +159,6 @@ public class UIPanelBindings : ScriptableObject
     }
 
     /// <summary>
-    /// 获取面板对象（运行时获取）
-    /// </summary>
-    public GameObject GetPanelObject()
-    {
-        if (panelInstanceID == 0)
-            return null;
-
-        // 首先尝试通过实例ID获取
-        var obj = EditorUtility.InstanceIDToObject(panelInstanceID) as GameObject;
-        if (obj != null)
-        {
-            return obj;
-        }
-
-        // 如果实例ID失败，尝试通过路径获取
-        if (!string.IsNullOrEmpty(panelPathInScene))
-        {
-            return GameObject.Find(panelPathInScene);
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// 获取GameObject的完整路径
     /// </summary>
     public static string GetGameObjectFullPath(GameObject obj)
@@ -270,14 +204,5 @@ public class UIPanelBindings : ScriptableObject
         }
 
         return path;
-    }
-
-    /// <summary>
-    /// 验证面板是否仍然有效
-    /// </summary>
-    public bool IsValidPanel()
-    {
-        var panel = GetPanelObject();
-        return panel != null && panel.name == panelName;
     }
 }

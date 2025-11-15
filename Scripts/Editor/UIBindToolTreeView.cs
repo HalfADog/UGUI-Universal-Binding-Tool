@@ -3,7 +3,6 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
-//TreeView
 public class UIBindToolTreeView : TreeView
 {
     private List<KeyValuePair<int, (GameObject obj,GameObject objPrefab)>> m_data = new List<KeyValuePair<int, (GameObject,GameObject)>>();
@@ -104,7 +103,7 @@ public class UIBindToolTreeView : TreeView
             return;
 
         // 获取当前对象的绑定数据
-        UIPanelBindings bindings = m_parentWindow.CurrentBindings;//UIBindDataManager.LoadBindingsForPanel(m_rootPanel);
+        UIPanelBindings bindings = m_parentWindow.CurrentBindings;
         if (bindings == null)
             return;
 
@@ -115,15 +114,7 @@ public class UIBindToolTreeView : TreeView
         // 过滤出有效的绑定
         var validBindings = objectBindings.FindAll(b => b.IsValidTarget());
         if (validBindings.Count == 0)
-        {
-            // 显示空状态提示
-            EditorGUI.LabelField(cellRect, "No bindings", new GUIStyle(EditorStyles.miniLabel)
-            {
-                normal = { textColor = new Color(0.7f, 0.7f, 0.7f, 0.5f) },
-                alignment = TextAnchor.MiddleCenter
-            });
             return;
-        }
 
         // 绘制绑定组件
         float currentX = cellRect.x;
@@ -133,16 +124,6 @@ public class UIBindToolTreeView : TreeView
 
         // 垂直居中
         float startY = cellRect.y + (cellRect.height - componentHeight) * 0.5f;
-
-        // 缓存样式以提高性能
-        var labelStyle = new GUIStyle(EditorStyles.miniLabel)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 11, // 增大字体
-            fontStyle = FontStyle.Bold, // 加粗字体
-            normal = { textColor = Color.white },
-            clipping = TextClipping.Clip
-        };
 
         for (int i = 0; i < validBindings.Count; i++)
         {

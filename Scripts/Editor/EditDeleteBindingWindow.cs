@@ -12,7 +12,6 @@ public class EditDeleteBindingWindow : EditorWindow
     // 界面字段
     private string m_variableName;
     private AccessModifier m_accessModifier;
-    //private bool m_isEnabled;
 
     /// <summary>
     /// 显示修改/删除绑定窗口
@@ -248,14 +247,13 @@ public class EditDeleteBindingWindow : EditorWindow
             assemblyQualifiedName = m_originalBinding.assemblyQualifiedName,
             variableName = m_variableName,
             accessModifier = m_accessModifier,
-            isEnabled = m_originalBinding.isEnabled
         };
 
         // 如果变量名发生变化，记录旧名称
         if (isVariableNameChanged)
         {
             updatedBinding.previousVariableName = m_originalBinding.variableName;
-            Debug.Log($"[EditDeleteBindingWindow] 记录变量名变更: {m_originalBinding.variableName} → {m_variableName}");
+            // Debug.Log($"[EditDeleteBindingWindow] 记录变量名变更: {m_originalBinding.variableName} → {m_variableName}");
         }
         else
         {

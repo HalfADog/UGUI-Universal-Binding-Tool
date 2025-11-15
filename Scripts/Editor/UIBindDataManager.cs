@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -157,31 +156,6 @@ public class UIBindDataManager
         EditorUtility.SetDirty(bindings);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-    }
-
-    /// <summary>
-    /// 删除指定面板的绑定数据
-    /// </summary>
-    /// <param name="targetPanel">目标UI面板</param>
-    /// <returns>是否成功删除</returns>
-    public static bool DeleteBindingsForPanel(GameObject targetPanel)
-    {
-        if (targetPanel == null)
-        {
-            return false;
-        }
-
-        string assetPath = GetBindingsAssetPath(targetPanel);
-        if (File.Exists(assetPath))
-        {
-            AssetDatabase.DeleteAsset(assetPath);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            Debug.Log($"已删除面板 {targetPanel.name} 的绑定数据");
-            return true;
-        }
-
-        return false;
     }
 
     /// <summary>

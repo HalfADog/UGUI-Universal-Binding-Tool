@@ -137,22 +137,7 @@ public class UIBindConfigWindow : EditorWindow
 
         // 组合变量名：前缀 + 对象名
         string variableName;
-        // if (componentPrefix.Equals(cleanObjectName, StringComparison.OrdinalIgnoreCase))
-        // {
-        //     // 如果前缀和对象名相同，只使用一个（例如：buttonButton -> button）
-        //     variableName = componentPrefix;
-        // }
-        // else if (cleanObjectName.StartsWith(componentPrefix, StringComparison.OrdinalIgnoreCase))
-        // {
-        //     // 如果对象名以前缀开头，只使用对象名（例如：buttonTestButton -> testButton）
-        //     variableName = cleanObjectName;
-        // }
-        // else
-        // {
-            // 否则组合前缀和对象名
         variableName = componentPrefix + cleanObjectName;
-        //}
-
         return variableName;
     }
 
@@ -170,7 +155,6 @@ public class UIBindConfigWindow : EditorWindow
             // 使用配置的前缀
             return settingsData.GetComponentPrefix(componentTypeName);
         }
-
         // 如果设置数据不可用，回退到组件类型小写
         return componentTypeName.ToLower();
     }
@@ -302,7 +286,7 @@ public class UIBindConfigWindow : EditorWindow
             return boundTypes;
 
         // 获取绑定数据
-        UIPanelBindings bindings = m_parentWindow.CurrentBindings;//UIBindDataManager.LoadBindingsForPanel(rootPanel);
+        UIPanelBindings bindings = m_parentWindow.CurrentBindings;
 
         // 获取当前对象的所有绑定（包括禁用的）
         List<UIBindItem> objectBindings = bindings?.GetBindingsForObject(targetObject) ?? null;
@@ -464,7 +448,6 @@ public class UIBindConfigWindow : EditorWindow
         catch (Exception e)
         {
             EditorUtility.DisplayDialog("错误", $"添加绑定时发生错误: {e.Message}", "确定");
-            // Debug.LogError($"添加绑定失败: {e}");
         }
     }
 

@@ -8,11 +8,12 @@ using UnityEngine;
 public class UIBindToolWindow : EditorWindow
 {
     private const string MENU_PATH = "GameObject/UI Binding &e";
+    //绑定对象的实例
     private GameObject bindTarget;
+    //绑定对象实例所对应的Prefab
     private GameObject bindTargetPrefab;
+    //绑定对象上可绑定的所有对象
     private List<KeyValuePair<int, (GameObject obj,GameObject objPrefab)>> bindableObjects = new List<KeyValuePair<int, (GameObject,GameObject)>>();
-
-    public GameObject BindTargetPrefab => bindTargetPrefab;
 
     [SerializeField]
     private TreeViewState m_TreeViewState;
@@ -20,27 +21,28 @@ public class UIBindToolWindow : EditorWindow
     private MultiColumnHeaderState m_HeaderState;
     private UIBindToolTreeView m_UIBindToolTreeView;
     private GUID m_PrefabGuid; // 绑定的Prefab的GUID
-    private UIPanelBindings m_CurrentBindings = null; // 当前面板的绑定数据
+    private UIPanelBindings m_CurrentBindings = null; // 面板当前的绑定数据
 
     // 预览模式相关
     private bool m_IsPreviewMode = false; // 是否处于预览模式
     private Vector2 m_CodeScrollPosition = Vector2.zero; // 代码滚动位置
-    private string m_PreviewFileName = "UIBinding.cs"; // 预览文件名
-    private float m_CodeFontSize = 12f; // 代码字体大小
+    private string m_PreviewFileName = ""; // 预览文件名
+    private float m_CodeFontSize = 14f; // 代码字体大小
 
     // 设置模式相关
     private bool m_IsSettingsMode = false; // 是否处于设置模式
     private int m_SelectedSettingsIndex = 0; // 当前选中的设置索引
     private string[] m_SettingsNames = new string[0]; // 设置名称数组
     private Vector2 m_SettingsScrollPosition = Vector2.zero; // 设置界面滚动位置
-    private static UIBindToolSettingsData s_SettingsData; // 设置数据单例
+    private static UIBindToolSettingsData s_SettingsData; // 设置数据
 
     // 组件前缀配置相关
     private string m_NewComponentType = ""; // 新组件类型输入
     private string m_NewPrefix = ""; // 新前缀输入
 
-    public GUID PrefabGuid => m_PrefabGuid;
     public static UIBindToolSettingsData SettingsData => s_SettingsData;
+
+    //当前绑定数据
     public UIPanelBindings CurrentBindings
     {
         get => m_CurrentBindings;
@@ -75,6 +77,68 @@ public class UIBindToolWindow : EditorWindow
                && Selection.activeGameObject.GetComponent<RectTransform>() != null;
     }
 
+    void OnEnable()
+    {
+        // 加载设置数据
+        GetOrCreateSettingsData();
+
+        // 设置数据管理器的设置数据
+        if (s_SettingsData != null)
+        {
+            //初始化设置选项
+            UpdateSettingsOptions();
+            //默认选择第一个设置数据项
+            var lastSelectedItem = s_SettingsData.GetLastSelectedSettingsDataItem();
+            m_SelectedSettingsIndex = System.Array.IndexOf(m_SettingsNames, lastSelectedItem.settingsDataName);
+            if (m_SelectedSettingsIndex < 0) m_SelectedSettingsIndex = 0;
+            UIBindDataManager.SetSettingsDataContainer(s_SettingsData);
+        }
+
+        InitData(Selection.activeGameObject);
+
+        // 同步绑定数据与UI面板状态
+        if (bindTarget != null)
+        {
+            UIBindDataManager.UpdateBindingInstanceData(CurrentBindings, bindTarget);
+        }
+
+        // 确保 TreeViewState 存在
+        if (m_TreeViewState == null)
+            m_TreeViewState = new TreeViewState();
+
+        // --- 创建 Header 和 HeaderState ---
+        var headerState = CreateHeaderState();
+
+        if (MultiColumnHeaderState.CanOverwriteSerializedFields(m_HeaderState, headerState))
+        {
+            MultiColumnHeaderState.OverwriteSerializedFields(m_HeaderState, headerState);
+        }
+        m_HeaderState = headerState;
+
+        var multiColumnHeader = new MultiColumnHeader(headerState);
+
+        // 在 TreeView 构造时传入 Header 和组件名称列表
+        m_UIBindToolTreeView = new(m_TreeViewState, multiColumnHeader, this, bindableObjects, bindTarget);
+
+        //默认展开
+        ExpandAll();
+
+        // 注册撤销/重做事件监听
+        Undo.undoRedoPerformed += OnUndoRedoPerformed;
+        // Debug.Log("[UIBindToolWindow] 撤销/重做系统已初始化");
+    }
+
+    void OnDisable()
+    {
+        // 注销撤销/重做事件监听
+        Undo.undoRedoPerformed -= OnUndoRedoPerformed;
+
+        // 保存数据
+        UIBindDataManager.SaveBindings(CurrentBindings);
+
+        // Debug.Log("[UIBindToolWindow] 撤销/重做系统已关闭");
+    }
+
     /// <summary>
     /// 初始化数据
     /// </summary>
@@ -88,6 +152,7 @@ public class UIBindToolWindow : EditorWindow
         {
             EditorUtility.DisplayDialog("绑定错误", validation.Message, "确定");
             bindTarget = null;
+            EditorApplication.delayCall += Close;
             return;
         }
 
@@ -174,67 +239,6 @@ public class UIBindToolWindow : EditorWindow
         }
     }
 
-    void OnEnable()
-    {
-        // 加载设置数据
-        GetOrCreateSettingsData();
-
-        // 设置数据管理器的设置数据
-        if (s_SettingsData != null)
-        {
-            //初始化设置选项
-            UpdateSettingsOptions();
-            //默认选择第一个设置数据项
-            var lastSelectedItem = s_SettingsData.GetLastSelectedSettingsDataItem();
-            m_SelectedSettingsIndex = System.Array.IndexOf(m_SettingsNames, lastSelectedItem.settingsDataName);
-            if (m_SelectedSettingsIndex < 0) m_SelectedSettingsIndex = 0;
-            UIBindDataManager.SetSettingsDataContainer(s_SettingsData);
-        }
-
-        InitData(Selection.activeGameObject);
-
-        // 同步绑定数据与UI面板状态
-        if (bindTarget != null)
-        {
-            UIBindDataManager.UpdateBindingInstanceData(CurrentBindings, bindTarget);
-        }
-
-        // 确保 TreeViewState 存在
-        if (m_TreeViewState == null)
-            m_TreeViewState = new TreeViewState();
-
-        // --- 创建 Header 和 HeaderState ---
-        var headerState = CreateHeaderState();
-
-        if (MultiColumnHeaderState.CanOverwriteSerializedFields(m_HeaderState, headerState))
-        {
-            MultiColumnHeaderState.OverwriteSerializedFields(m_HeaderState, headerState);
-        }
-        m_HeaderState = headerState;
-
-        var multiColumnHeader = new MultiColumnHeader(headerState);
-
-        // 在 TreeView 构造时传入 Header 和组件名称列表
-        m_UIBindToolTreeView = new(m_TreeViewState, multiColumnHeader, this, bindableObjects, bindTarget);
-
-        //默认展开
-        ExpandAll();
-
-        // 注册撤销/重做事件监听
-        Undo.undoRedoPerformed += OnUndoRedoPerformed;
-        Debug.Log("[UIBindToolWindow] 撤销/重做系统已初始化");
-    }
-
-    void OnDisable()
-    {
-        // 注销撤销/重做事件监听
-        Undo.undoRedoPerformed -= OnUndoRedoPerformed;
-
-        // 保存数据
-        UIBindDataManager.SaveBindings(CurrentBindings);
-
-        Debug.Log("[UIBindToolWindow] 撤销/重做系统已关闭");
-    }
 
     /// <summary>
     /// 撤销/重做回调
@@ -769,25 +773,6 @@ public class UIBindToolWindow : EditorWindow
             // 更新TreeView显示
             m_UIBindToolTreeView?.Reload();
 
-            // 检查是否需要自动打开生成的脚本
-            var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
-            if (currentSettings != null && currentSettings.autoOpenGeneratedScripts)
-            {
-                // 打开绑定脚本
-                if (!string.IsNullOrEmpty(result.bindingScriptPath) && File.Exists(result.bindingScriptPath))
-                {
-                    UnityEditor.EditorUtility.OpenWithDefaultApp(result.bindingScriptPath);
-                    Debug.Log($"已自动打开生成的绑定脚本: {result.bindingScriptPath}");
-                }
-
-                // 打开主脚本
-                if (!string.IsNullOrEmpty(result.mainScriptPath) && File.Exists(result.mainScriptPath))
-                {
-                    UnityEditor.EditorUtility.OpenWithDefaultApp(result.mainScriptPath);
-                    Debug.Log($"已自动打开生成的主脚本: {result.mainScriptPath}");
-                }
-            }
-
             // 始终注册自动绑定任务（只要类名存在）
             if (!string.IsNullOrEmpty(result.mainScriptClassName) && result.targetPanel != null)
             {
@@ -799,7 +784,7 @@ public class UIBindToolWindow : EditorWindow
                 }
 
                 UIAutoBinder.RegisterBindingTask(result.targetPanel, result.mainScriptClassName, result.mainScriptPath, bindingsDataPath);
-                Debug.Log($"UIAutoBinder: 已注册自动绑定任务 - {result.mainScriptClassName}");
+                // Debug.Log($"UIAutoBinder: 已注册自动绑定任务 - {result.mainScriptClassName}");
             }
 
             // 刷新AssetDatabase
@@ -904,12 +889,6 @@ public class UIBindToolWindow : EditorWindow
             margin = new RectOffset(5, 5, 10, 5)
         };
         EditorGUILayout.LabelField(new GUIContent(title,helpText), titleStyle);
-
-        // 帮助文本（可选）
-        // if (!string.IsNullOrEmpty(helpText))
-        // {
-        //     EditorGUILayout.HelpBox(helpText, MessageType.Info);
-        // }
 
         // 绘制分组背景
         Rect rect = EditorGUILayout.BeginVertical();

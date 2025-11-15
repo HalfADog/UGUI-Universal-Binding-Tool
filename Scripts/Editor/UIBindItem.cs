@@ -21,7 +21,6 @@ public class UIBindItem
     public string previousVariableName; // 之前的变量名（用于重命名追踪）
     public string assemblyQualifiedName;// 完全限定名
     public AccessModifier accessModifier; // 访问修饰符
-    public bool isEnabled; // 是否启用该绑定
 
     public UIBindItem()
     {
@@ -36,7 +35,6 @@ public class UIBindItem
         assemblyQualifiedName = "";
         accessModifier = AccessModifier.Private;
         variableName = "";
-        isEnabled = true;
     }
 
     /// <summary>
@@ -48,7 +46,6 @@ public class UIBindItem
         {
             targetInstanceID = targetInstance.GetInstanceID();
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(targetPrefab, out string guid, out targetObjectFileID);
-            //Debug.Log(targetObjectFileID);
 
             // 优先使用相对路径，如果无法计算则使用绝对路径
             if (panelRoot != null)
@@ -84,7 +81,6 @@ public class UIBindItem
         accessModifier = access;
         variableName = varName;
         previousVariableName = ""; // 初始化为空
-        isEnabled = true;
     }
 
     /// <summary>

@@ -69,75 +69,6 @@ public class UIBindToolSettingsData : ScriptableObject
         return componentTypeName.ToLower();
     }
 
-    /// <summary>
-    /// 添加或更新组件前缀映射
-    /// </summary>
-    /// <param name="componentTypeName">组件类型名称</param>
-    /// <param name="prefix">前缀字符串</param>
-    public void SetComponentPrefix(string componentTypeName, string prefix)
-    {
-        if (string.IsNullOrEmpty(componentTypeName))
-            return;
-
-        var existingMapping = componentPrefixMappings.Find(m => m.componentType == componentTypeName);
-        if (existingMapping != null)
-        {
-            existingMapping.prefix = prefix;
-        }
-        else
-        {
-            componentPrefixMappings.Add(new ComponentPrefixMapping(componentTypeName, prefix));
-        }
-    }
-
-    /// <summary>
-    /// 删除组件前缀映射
-    /// </summary>
-    /// <param name="componentTypeName">组件类型名称</param>
-    /// <returns>是否成功删除</returns>
-    public bool RemoveComponentPrefix(string componentTypeName)
-    {
-        if (string.IsNullOrEmpty(componentTypeName))
-            return false;
-
-        return componentPrefixMappings.RemoveAll(m => m.componentType == componentTypeName) > 0;
-    }
-
-    /// <summary>
-    /// 获取所有组件前缀映射的副本
-    /// </summary>
-    /// <returns>组件前缀映射列表的副本</returns>
-    public List<ComponentPrefixMapping> GetComponentPrefixMappingsCopy()
-    {
-        return new List<ComponentPrefixMapping>(componentPrefixMappings);
-    }
-
-    /// <summary>
-    /// 批量更新组件前缀映射
-    /// </summary>
-    /// <param name="newMappings">新的映射列表</param>
-    public void UpdateComponentPrefixMappings(List<ComponentPrefixMapping> newMappings)
-    {
-        if (newMappings == null)
-            return;
-
-        componentPrefixMappings.Clear();
-        componentPrefixMappings.AddRange(newMappings);
-    }
-
-    /// <summary>
-    /// 检查是否存在指定的组件类型映射
-    /// </summary>
-    /// <param name="componentTypeName">组件类型名称</param>
-    /// <returns>是否存在</returns>
-    public bool HasComponentPrefixMapping(string componentTypeName)
-    {
-        if (string.IsNullOrEmpty(componentTypeName))
-            return false;
-
-        return componentPrefixMappings.Exists(m => m.componentType == componentTypeName);
-    }
-
     public UIBindToolSettingsDataItem GetLastSelectedSettingsDataItem()
     {
         return GetSettingsDataItemByName(lastSelectedSettingsDataName);
@@ -156,17 +87,6 @@ public class UIBindToolSettingsData : ScriptableObject
             names.Add(item.settingsDataName);
         }
         return names.ToArray();
-    }
-
-    /// <summary>
-    /// 获取全局设置数据单例实例
-    /// </summary>
-    /// <returns>设置数据实例，如果不存在则返回null</returns>
-    public static UIBindToolSettingsData GetInstance()
-    {
-        // 这个方法将由UIBindToolWindow在OnEnable时调用设置
-        // 这里返回null，实际使用时通过UIBindToolWindow.SettingsData获取
-        return null;
     }
 }
 

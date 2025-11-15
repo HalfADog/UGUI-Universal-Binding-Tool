@@ -2,8 +2,6 @@ using UnityEditor;
 using UnityEngine;
 using System;
 using System.IO;
-using System.Reflection;
-using Unity.VisualScripting;
 
 /// <summary>
 /// UI自动绑定器
@@ -24,6 +22,7 @@ public static class UIAutoBinder
     public class BindingTask
     {
         public int targetPanelInstanceId;
+        public string mainScriptPath;
         public string mainScriptClassName;
         public string bindingsDataPath;
     }
@@ -49,6 +48,7 @@ public static class UIAutoBinder
     private static void OnScriptsReloaded()
     {
         string bind = EditorPrefs.GetString(BINDING_TASKS, "False");
+        // 有绑定任务才执行绑定
         if (bind == "True")
         {
             // 从EditorPrefs重新加载绑定任务
@@ -76,6 +76,7 @@ public static class UIAutoBinder
         var task = new BindingTask
         {
             targetPanelInstanceId = targetPanel.GetInstanceID(),
+            mainScriptPath = mainScriptPath,
             mainScriptClassName = mainScriptClassName,
             bindingsDataPath = bindingsDataPath
         };
@@ -84,7 +85,7 @@ public static class UIAutoBinder
         // 立即保存到EditorPrefs
         SaveBindingTasks();
 
-        Debug.Log($"UIAutoBinder: 注册绑定任务 - {mainScriptClassName} -> {targetPanel.name} (ID: {task.targetPanelInstanceId})");
+        // Debug.Log($"UIAutoBinder: 注册绑定任务 - {mainScriptClassName} -> {targetPanel.name} (ID: {task.targetPanelInstanceId})");
         EditorPrefs.SetString(BINDING_TASKS, "True");
     }
 
@@ -223,7 +224,7 @@ public static class UIAutoBinder
         {
             try
             {
-                if (binding == null || binding.isEnabled == false)
+                if (binding == null)
                     continue;
 
                 string fieldName = binding.variableName;
@@ -257,6 +258,17 @@ public static class UIAutoBinder
         EditorUtility.SetDirty(component);
         EditorUtility.SetDirty(targetPanel);
         AssetDatabase.SaveAssets();
+
+        // 检查是否需要自动打开生成的脚本
+        var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
+        if (currentSettings != null && currentSettings.autoOpenGeneratedScripts)
+        {
+            // 打开主脚本
+            if (!string.IsNullOrEmpty(bindingTask.mainScriptPath) && File.Exists(bindingTask.mainScriptPath))
+            {
+                UnityEditor.EditorUtility.OpenWithDefaultApp(bindingTask.mainScriptPath);
+            }
+        }
     }
 
     /// <summary>

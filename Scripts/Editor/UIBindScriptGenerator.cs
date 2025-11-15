@@ -172,11 +172,11 @@ public static class UIBindScriptGenerator
             Debug.Log($"生成绑定脚本: {bindingPath}");
 
             // 生成主脚本（如果指定了模板文件且主脚本不存在）
-            string mainScriptPath = null;
+            string mainScriptPath = Path.Combine(config.uiMainScriptFolder, GetMainScriptName(bindings));
+            result.mainScriptPath = mainScriptPath;
             if (!string.IsNullOrEmpty(config.templateTextFilePath) &&
                 !string.IsNullOrEmpty(config.uiMainScriptFolder))
             {
-                mainScriptPath = Path.Combine(config.uiMainScriptFolder, GetMainScriptName(bindings));
 
                 // 始终设置类名（即使主脚本已存在）
                 result.mainScriptClassName = GetBindingClassName(bindings);
@@ -192,7 +192,6 @@ public static class UIBindScriptGenerator
                     if (!string.IsNullOrEmpty(mainScriptCode))
                     {
                         File.WriteAllText(mainScriptPath, mainScriptCode);
-                        result.mainScriptPath = mainScriptPath;
                         Debug.Log($"生成主脚本: {mainScriptPath}");
                     }
                 }
@@ -208,7 +207,6 @@ public static class UIBindScriptGenerator
                 {
                     try
                     {
-                        Debug.Log($"[UIBindScriptGenerator] 检测到 {renamedBindings.Count} 个变量名需要更新");
 
                         // 读取主脚本内容
                         string mainScriptContent = File.ReadAllText(mainScriptPath);
@@ -233,7 +231,7 @@ public static class UIBindScriptGenerator
 
                             if (replacements > 0)
                             {
-                                Debug.Log($"[UIBindScriptGenerator] 替换变量名: {oldName} → {newName} ({replacements} 处)");
+                                // Debug.Log($"[UIBindScriptGenerator] 替换变量名: {oldName} → {newName} ({replacements} 处)");
                                 totalReplacements += replacements;
                             }
 
@@ -245,7 +243,7 @@ public static class UIBindScriptGenerator
                         if (totalReplacements > 0)
                         {
                             File.WriteAllText(mainScriptPath, mainScriptContent);
-                            Debug.Log($"[UIBindScriptGenerator] 更新主脚本完成，共替换 {totalReplacements} 处");
+                            // Debug.Log($"[UIBindScriptGenerator] 更新主脚本完成，共替换 {totalReplacements} 处");
                         }
                     }
                     catch (Exception e)
@@ -436,7 +434,6 @@ public static class UIBindScriptGenerator
             : "";
     }
 
-    
     /// <summary>
     /// 获取绑定类名
     /// </summary>
@@ -554,7 +551,6 @@ public static class UIBindScriptGenerator
                 newBinding.SetComponentType(binding.GetComponentType());
                 newBinding.variableName = finalName;
                 newBinding.accessModifier = binding.accessModifier;
-                newBinding.isEnabled = binding.isEnabled;
 
                 uniqueBindings.Add(newBinding);
                 Debug.LogWarning($"变量名重复：'{originalName}' 已调整为 '{finalName}' 以确保代码生成正确");

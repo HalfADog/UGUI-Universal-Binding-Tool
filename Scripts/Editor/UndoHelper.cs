@@ -68,22 +68,9 @@ public static class UndoHelper
         if (activeScene.isLoaded)
         {
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(activeScene);
-            Debug.Log("[UndoHelper] 场景已标记为已修改");
         }
     }
-
-    /// <summary>
-    /// 清空撤销栈（谨慎使用）
-    /// </summary>
-    public static void ClearUndoStack(UnityEngine.Object obj)
-    {
-        if (obj != null)
-        {
-            Undo.ClearUndo(obj);
-            Debug.Log($"[UndoHelper] 已清空 {obj.name} 的撤销栈");
-        }
-    }
-
+    
     /// <summary>
     /// 获取撤销操作的友好名称
     /// </summary>
