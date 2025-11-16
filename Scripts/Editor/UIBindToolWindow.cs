@@ -118,7 +118,12 @@ public class UIBindToolWindow : EditorWindow
         var multiColumnHeader = new MultiColumnHeader(headerState);
 
         // 在 TreeView 构造时传入 Header 和组件名称列表
-        m_UIBindToolTreeView = new(m_TreeViewState, multiColumnHeader, this, bindableObjects, bindTarget);
+        m_UIBindToolTreeView = new UIBindToolTreeView(m_TreeViewState, multiColumnHeader, this, bindableObjects, bindTarget);
+
+        if(m_UIBindToolTreeView == null)
+        {
+            Debug.LogError("UIBindToolTreeView 构造失败");
+        }
 
         //默认展开
         ExpandAll();
@@ -158,8 +163,15 @@ public class UIBindToolWindow : EditorWindow
 
         bindTarget = target;
         bindableObjects.Clear();
-        bindTargetPrefab = PrefabUtility.GetCorrespondingObjectFromSource(bindTarget);
-        GetBindableObjectsWithStructure(bindTarget, bindTargetPrefab);
+        // GetNearestPrefabInstanceRoot GetCorrespondingObjectFromSource
+        bindTargetPrefab = UIBindDataManager.GetPrefabSourceRoot(bindTarget);
+        if(bindTargetPrefab.transform.childCount != bindTarget.transform.childCount)
+        {
+            EditorUtility.DisplayDialog("错误", "确保当前Prefab实例与Prefab资源相同（也许你需要应用当前Prefab的修改）", "确定");
+            EditorApplication.delayCall += Close;
+            return;
+        }
+        GetBindableObjectsWithStructure(bindTargetPrefab,bindTarget, bindTargetPrefab);
         //获取Prefab的GUID
         m_PrefabGuid = UIBindDataManager.GetPrefabGUID(bindTarget);
         if (m_PrefabGuid != default) Debug.Log($"Prefab GUID: {m_PrefabGuid}");
@@ -518,18 +530,22 @@ public class UIBindToolWindow : EditorWindow
         m_UIBindToolTreeView.Reload();
     }
 
-    void GetBindableObjectsWithStructure(GameObject root,GameObject rootPrefab, int depth = 1)
+    void GetBindableObjectsWithStructure(GameObject rootPrefab,GameObject current,GameObject currentPrefab, int depth = 1)
     {
         if (depth == 1)
         {
-            bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth - 1, (root,rootPrefab)));
+            bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth - 1, (current,currentPrefab)));
         }
-        for (int i = 0; i < root.transform.childCount; i++)
+        for (int i = 0; i < current.transform.childCount; i++)
         {
-            GameObject child = root.transform.GetChild(i).gameObject;
-            GameObject childPrefab = rootPrefab.transform.GetChild(i).gameObject;
+            GameObject child = current.transform.GetChild(i).gameObject;
+            GameObject childPrefab = currentPrefab.transform.GetChild(i).gameObject;
+            // 如果是Prefab中的子Prefab则展开
+            GameObject tempPrefab = UIBindDataManager.GetPrefabSourceRoot(child);
+            if(tempPrefab.name != rootPrefab.name && tempPrefab.name != child.name)
+                continue;
             bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth, (child,childPrefab)));
-            if (child.transform.childCount > 0) GetBindableObjectsWithStructure(child, childPrefab ,depth + 1);
+            if (child.transform.childCount > 0) GetBindableObjectsWithStructure(rootPrefab,child, childPrefab ,depth + 1);
         }
     }
 

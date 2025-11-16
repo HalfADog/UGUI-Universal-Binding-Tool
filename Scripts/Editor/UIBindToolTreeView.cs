@@ -8,6 +8,7 @@ public class UIBindToolTreeView : TreeView
     private List<KeyValuePair<int, (GameObject obj,GameObject objPrefab)>> m_data = new List<KeyValuePair<int, (GameObject,GameObject)>>();
     private GameObject m_rootPanel; // UI面板的根对象
     private UIBindToolWindow m_parentWindow;
+    private GUIStyle m_labelStyle;
 
     public UIBindToolTreeView(TreeViewState state, MultiColumnHeader header,UIBindToolWindow parentWindow,List<KeyValuePair<int, (GameObject,GameObject)>> data, GameObject rootPanel) : base(state, header)
     {
@@ -17,6 +18,10 @@ public class UIBindToolTreeView : TreeView
         rowHeight = 25;
         showAlternatingRowBackgrounds = true;
         showBorder = true;
+        m_labelStyle = new(EditorStyles.boldLabel)
+        {
+            normal = { textColor = new(0.5f, 0.5f, 1f, 1f) }
+        };
         Reload();
     }
 
@@ -50,7 +55,11 @@ public class UIBindToolTreeView : TreeView
                 float indent = GetContentIndent(item);
                 cellRect.x += indent;
                 cellRect.width -= indent;
-                EditorGUI.LabelField(cellRect, args.label);
+                GameObject tempPrefab = UIBindDataManager.GetPrefabSourceRoot(item.boundObject);
+                if(tempPrefab.name == item.boundObject.name)
+                    EditorGUI.LabelField(cellRect, args.label,m_labelStyle);
+                else
+                    EditorGUI.LabelField(cellRect, args.label);
             }
             // 第二列显示Bind按钮
             else if (columnIndex == 1)

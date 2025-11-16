@@ -252,7 +252,7 @@ public class UIBindDataManager
         bindings.panelPathInScene = UIPanelBindings.GetGameObjectFullPath(panelInstance);
         bindings.panelName = panelInstance.name;
         //获取panel的Prefab
-        var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(panelInstance);
+        var prefabAsset = UIBindDataManager.GetPrefabSourceRoot(panelInstance);
         //记录Prefab子对象的FileID与相对于Prefab的路径 以Dictionary形式存储
         Dictionary<long, string> prefabObjectData = new Dictionary<long, string>();
         long rootFileID = 0;
@@ -263,7 +263,6 @@ public class UIBindDataManager
                 AssetDatabase.TryGetGUIDAndLocalFileIdentifier(child.gameObject, out string guid, out long fileID);
                 string relativePath = UIPanelBindings.GetGameObjectRelativePath(prefabAsset, child.gameObject);
                 prefabObjectData[fileID] = relativePath;
-                Debug.Log(relativePath);
             }
             //包括Prefab根对象
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(prefabAsset, out string rootGuid, out rootFileID);
@@ -294,8 +293,18 @@ public class UIBindDataManager
     {
         if (panel == null)
             return default;
-        var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(panel);
+        var prefabAsset = GetPrefabSourceRoot(panel);
         string prefabPath = AssetDatabase.GetAssetPath(prefabAsset);
         return AssetDatabase.GUIDFromAssetPath(prefabPath);
+    }
+
+    public static GameObject GetPrefabSourceRoot(GameObject instanceObj)
+    {
+        if (instanceObj == null || !PrefabUtility.IsPartOfPrefabInstance(instanceObj))
+            return null;
+
+        GameObject instanceRoot = PrefabUtility.GetNearestPrefabInstanceRoot(instanceObj);
+        GameObject prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(instanceRoot) as GameObject;
+        return prefabAsset;
     }
 }

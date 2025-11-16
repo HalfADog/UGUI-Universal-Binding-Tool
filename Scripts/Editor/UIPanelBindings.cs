@@ -139,7 +139,7 @@ public class UIPanelBindings : ScriptableObject
         if (panel != null)
         {
             //获取GUID
-            var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(panel);
+            var prefabAsset = UIBindDataManager.GetPrefabSourceRoot(panel);
             string prefabPath = AssetDatabase.GetAssetPath(prefabAsset);
             panelPrefabGUID = AssetDatabase.GUIDFromAssetPath(prefabPath).ToString();
             panelInstanceID = panel.GetInstanceID();
