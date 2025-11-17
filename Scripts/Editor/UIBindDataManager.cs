@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -203,7 +204,7 @@ public class UIBindDataManager
         //查找对应GUID的绑定
         foreach (var binding in allBindings)
         {
-            if (binding.panelPrefabGUID == prefabGuid)
+            if (binding.targetPrefabGUID == prefabGuid)
             {
                 return AssetDatabase.GetAssetPath(binding);
             }
@@ -225,7 +226,7 @@ public class UIBindDataManager
             return "";
 
         // 如果已有GUID，尝试通过GUID查找
-        if (!string.IsNullOrEmpty(bindings.panelPrefabGUID))
+        if (!string.IsNullOrEmpty(bindings.targetPrefabGUID))
         {
             string path = AssetDatabase.GetAssetPath(bindings);
             if (!string.IsNullOrEmpty(path))
@@ -233,7 +234,7 @@ public class UIBindDataManager
         }
 
         // 使用面板名称作为文件名，确保唯一性
-        string fileName = bindings.panelName;
+        string fileName = bindings.targetName;
         string safeFileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
         return $"{GetBindDataFolder()}/{safeFileName}{BIND_DATA_EXTENSION}";
     }
@@ -247,12 +248,12 @@ public class UIBindDataManager
     {
         if (bindings == null || panelInstance == null)
             return;
-        //更新面板实例数据
-        bindings.panelInstanceID = panelInstance.GetInstanceID();
-        bindings.panelPathInScene = UIPanelBindings.GetGameObjectFullPath(panelInstance);
-        bindings.panelName = panelInstance.name;
-        //获取panel的Prefab
-        var prefabAsset = UIBindDataManager.GetPrefabSourceRoot(panelInstance);
+        //更新实例数据
+        bindings.targetInstanceID = panelInstance.GetInstanceID();
+        bindings.targetPathInScene = UIPanelBindings.GetGameObjectFullPath(panelInstance);
+        bindings.targetName = panelInstance.name;
+        //获取Prefab
+        var prefabAsset = GetPrefabSourceRoot(panelInstance);
         //记录Prefab子对象的FileID与相对于Prefab的路径 以Dictionary形式存储
         Dictionary<long, string> prefabObjectData = new Dictionary<long, string>();
         long rootFileID = 0;
@@ -266,13 +267,13 @@ public class UIBindDataManager
             }
             //包括Prefab根对象
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(prefabAsset, out string rootGuid, out rootFileID);
-            prefabObjectData[rootFileID] = bindings.panelPathInScene;
+            prefabObjectData[rootFileID] = bindings.targetPathInScene;
         }
         //更新绑定数据
         foreach (var bindItem in bindings.bindings)
         {
             string path = prefabObjectData[bindItem.targetObjectFileID];
-            bindItem.targetObjectFullPathInScene = bindings.panelPathInScene;
+            bindItem.targetObjectFullPathInScene = bindings.targetPathInScene;
             if (bindItem.targetObjectFileID != rootFileID)
             {
                 bindItem.targetObjectRelativePath = path;
@@ -304,7 +305,67 @@ public class UIBindDataManager
             return null;
 
         GameObject instanceRoot = PrefabUtility.GetNearestPrefabInstanceRoot(instanceObj);
+        GameObject prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(instanceRoot);
+        //Debug.Log($"{prefabAsset.name}对应的Prefab资源路径为： {AssetDatabase.GetAssetPath(prefabAsset)}");
+        string rootPath = AssetDatabase.GetAssetPath(prefabAsset);
+        if (string.IsNullOrEmpty(rootPath)) return null;
+        if(rootPath.Split("/").Last().Split(".")[0] == prefabAsset.name)
+            return prefabAsset;
+        // 打开 prefab asset 的内容并在其中查找对应对象
+        GameObject prefabContentsRoot = PrefabUtility.LoadPrefabContents(rootPath);
+        try
+        {
+            // 这里需要一种方式把 sceneChild 映射到 prefabContents 中的对象。
+            string relativePath = UIPanelBindings.GetGameObjectRelativePath(prefabContentsRoot,prefabAsset);
+            // Debug.Log($"{prefabContentsRoot.name} {prefabAsset.name} {relativePath}");
+            Transform targetInPrefab = prefabContentsRoot.transform.Find(relativePath);
+            if (targetInPrefab != null)
+            {
+                // 在 prefab 内容中，检查这个对象是否是一个嵌套 Prefab 实例（即它引用了外部 prefab asset）
+                var corresponding = PrefabUtility.GetCorrespondingObjectFromSource(targetInPrefab.gameObject);
+                if (corresponding != null)
+                {
+                    // Debug.Log(AssetDatabase.GetAssetPath(corresponding));
+                    return corresponding;
+                }
+                else
+                    return prefabAsset;
+            }
+            else
+                return null;
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabContentsRoot);
+        }
+    }
+    public static GameObject GetPrefabSourceRootEx(GameObject instanceObj)
+    {
+        if (instanceObj == null || !PrefabUtility.IsPartOfPrefabInstance(instanceObj))
+            return null;
+
+        // 获取父 Prefab 实例根
+        GameObject instanceRoot = PrefabUtility.GetNearestPrefabInstanceRoot(instanceObj);
+        Debug.Log($"父 Prefab 实例根:{instanceRoot.name}");
+        // 如果当前对象是父 Prefab 的子对象，继续往下处理
         GameObject prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(instanceRoot) as GameObject;
+        Debug.Log($"父 Prefab 资源:{prefabAsset.name}");
+        // 遍历父 Prefab 实例的所有子对象，查找嵌套 Prefab
+        foreach (Transform child in instanceRoot.transform)
+        {
+            // 如果子对象本身是 Prefab 实例
+            if (PrefabUtility.IsPartOfPrefabInstance(child.gameObject))
+            {
+                GameObject childPrefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(child.gameObject) as GameObject;
+                if (childPrefabAsset != null)
+                {
+                    // 返回子 Prefab 资源
+                    return childPrefabAsset;
+                }
+            }
+        }
+
+        // 如果没有找到嵌套的 Prefab，返回父 Prefab 资源
         return prefabAsset;
     }
 }

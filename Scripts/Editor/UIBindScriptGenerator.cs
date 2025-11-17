@@ -360,7 +360,7 @@ public static class UIBindScriptGenerator
         string className = GetBindingClassName(bindings);
 
         code.AppendLine($"{classIndent}/// <summary>");
-        code.AppendLine($"{classIndent}/// {bindings.panelName} UI字段定义（自动生成）");
+        code.AppendLine($"{classIndent}/// {bindings.targetName} UI字段定义（自动生成）");
         code.AppendLine($"{classIndent}/// </summary>");
 
         // 构建类声明行
@@ -443,7 +443,7 @@ public static class UIBindScriptGenerator
     /// </summary>
     private static string GetBindingClassName(UIPanelBindings bindings)
     {
-        string className = bindings.panelName;
+        string className = bindings.targetName;
 
         // 移除空格和特殊字符
         className = System.Text.RegularExpressions.Regex.Replace(className, @"[^a-zA-Z0-9_]", "");
@@ -622,11 +622,11 @@ public static class UIBindScriptGenerator
     /// <returns>根面板游戏对象</returns>
     private static GameObject GetRootPanelObject(UIPanelBindings bindings)
     {
-        if (string.IsNullOrEmpty(bindings.panelPrefabGUID))
+        if (string.IsNullOrEmpty(bindings.targetPrefabGUID))
             return null;
 
         // 通过GUID查找预制体
-        string assetPath = AssetDatabase.GUIDToAssetPath(bindings.panelPrefabGUID);
+        string assetPath = AssetDatabase.GUIDToAssetPath(bindings.targetPrefabGUID);
         if (string.IsNullOrEmpty(assetPath))
             return null;
 

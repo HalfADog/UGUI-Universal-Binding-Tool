@@ -9,11 +9,11 @@ using UnityEngine;
 /// </summary>
 public class UIPanelBindings : ScriptableObject
 {
-    [Header("面板信息")]
-    public string panelPrefabGUID; // 面板的GUID
-    public int panelInstanceID; // 面板的实例ID
-    public string panelPathInScene; // 面板的路径
-    public string panelName; // 面板名称
+    [Header("对象信息")]
+    public string targetPrefabGUID; // 面板的GUID
+    public int targetInstanceID; // 面板的实例ID
+    public string targetPathInScene; // 面板的路径
+    public string targetName; // 面板名称
     public DateTime createdTime; // 创建时间
     public DateTime lastModifiedTime; // 最后修改时间
 
@@ -141,16 +141,16 @@ public class UIPanelBindings : ScriptableObject
             //获取GUID
             var prefabAsset = UIBindDataManager.GetPrefabSourceRoot(panel);
             string prefabPath = AssetDatabase.GetAssetPath(prefabAsset);
-            panelPrefabGUID = AssetDatabase.GUIDFromAssetPath(prefabPath).ToString();
-            panelInstanceID = panel.GetInstanceID();
-            panelPathInScene = GetGameObjectFullPath(panel);
-            panelName = panel.name;
+            targetPrefabGUID = AssetDatabase.GUIDFromAssetPath(prefabPath).ToString();
+            targetInstanceID = panel.GetInstanceID();
+            targetPathInScene = GetGameObjectFullPath(panel);
+            targetName = panel.name;
         }
         else
         {
-            panelInstanceID = 0;
-            panelPathInScene = "";
-            panelName = "";
+            targetInstanceID = 0;
+            targetPathInScene = "";
+            targetName = "";
         }
 
         createdTime = DateTime.Now;
@@ -191,7 +191,7 @@ public class UIPanelBindings : ScriptableObject
         string path = obj.name;
         Transform parent = obj.transform.parent;
 
-        while (parent != null && parent.gameObject != root)
+        while (parent != null && parent.gameObject.name != root.name)
         {
             path = parent.name + "/" + path;
             parent = parent.parent;

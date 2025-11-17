@@ -162,16 +162,21 @@ public class UIBindToolWindow : EditorWindow
         }
 
         bindTarget = target;
-        bindableObjects.Clear();
-        // GetNearestPrefabInstanceRoot GetCorrespondingObjectFromSource
         bindTargetPrefab = UIBindDataManager.GetPrefabSourceRoot(bindTarget);
+        if (bindTargetPrefab.name != bindTarget.name)
+        {
+            EditorUtility.DisplayDialog("错误", "请选择Prefab实例的根对象", "确定");
+            EditorApplication.delayCall += Close;
+            return;
+        }
         if(bindTargetPrefab.transform.childCount != bindTarget.transform.childCount)
         {
             EditorUtility.DisplayDialog("错误", "确保当前Prefab实例与Prefab资源相同（也许你需要应用当前Prefab的修改）", "确定");
             EditorApplication.delayCall += Close;
             return;
         }
-        GetBindableObjectsWithStructure(bindTargetPrefab,bindTarget, bindTargetPrefab);
+        bindableObjects.Clear();
+        GetBindableObjectsWithStructure(bindTargetPrefab,bindTarget,bindTargetPrefab);
         //获取Prefab的GUID
         m_PrefabGuid = UIBindDataManager.GetPrefabGUID(bindTarget);
         if (m_PrefabGuid != default) Debug.Log($"Prefab GUID: {m_PrefabGuid}");
@@ -186,7 +191,7 @@ public class UIBindToolWindow : EditorWindow
         var allBindingDatas = UIBindDataManager.GetAllBindings();
         foreach (var bindingData in allBindingDatas)
         {
-            if (bindingData.panelPrefabGUID == m_PrefabGuid.ToString())
+            if (bindingData.targetPrefabGUID == m_PrefabGuid.ToString())
             {
                 m_CurrentBindings = bindingData;
                 break;
@@ -203,21 +208,13 @@ public class UIBindToolWindow : EditorWindow
             return new PanelValidationResult(false, "Panel对象为空");
 
         // 检查是否为Prefab实例
-        if (!IsPrefabInstance(panel))
+        if (!(PrefabUtility.GetPrefabInstanceStatus(panel) == PrefabInstanceStatus.Connected))
         {
             return new PanelValidationResult(false,
                 "选中的对象不是Prefab实例。\n\n请先将UI Panel保存为Prefab，然后再进行绑定。\n\n操作步骤：\n1. 在Hierarchy中选中Panel\n2. 将其拖拽到Project窗口创建Prefab\n3. 使用场景中的Prefab实例进行绑定");
         }
 
         return new PanelValidationResult(true, "Panel验证通过");
-    }
-
-    /// <summary>
-    /// 检查对象是否为Prefab实例
-    /// </summary>
-    private bool IsPrefabInstance(GameObject obj)
-    {
-        return PrefabUtility.GetPrefabInstanceStatus(obj) == PrefabInstanceStatus.Connected;
     }
 
     /// <summary>
@@ -530,18 +527,25 @@ public class UIBindToolWindow : EditorWindow
         m_UIBindToolTreeView.Reload();
     }
 
-    void GetBindableObjectsWithStructure(GameObject rootPrefab,GameObject current,GameObject currentPrefab, int depth = 1)
+    void GetBindableObjectsWithStructure(GameObject rootPrefab,GameObject current,GameObject currentInPrefab, int depth = 1)
     {
         if (depth == 1)
         {
-            bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth - 1, (current,currentPrefab)));
+            bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth - 1, (current,currentInPrefab)));
+        }
+        if(current.transform.childCount != currentInPrefab.transform.childCount)
+        {
+            EditorUtility.DisplayDialog("错误", "确保当前Prefab实例与Prefab资源相同（也许你需要应用当前Prefab的修改）", "确定");
+            EditorApplication.delayCall += Close;
+            bindableObjects.Clear();
+            return;
         }
         for (int i = 0; i < current.transform.childCount; i++)
         {
             GameObject child = current.transform.GetChild(i).gameObject;
-            GameObject childPrefab = currentPrefab.transform.GetChild(i).gameObject;
-            // 如果是Prefab中的子Prefab则展开
-            GameObject tempPrefab = UIBindDataManager.GetPrefabSourceRoot(child);
+            GameObject childPrefab = currentInPrefab.transform.GetChild(i).gameObject;
+            // 如果是Prefab中的子Prefab则不展开
+            GameObject tempPrefab = PrefabUtility.GetNearestPrefabInstanceRoot(child);
             if(tempPrefab.name != rootPrefab.name && tempPrefab.name != child.name)
                 continue;
             bindableObjects.Add(new KeyValuePair<int, (GameObject,GameObject)>(depth, (child,childPrefab)));
@@ -843,9 +847,9 @@ public class UIBindToolWindow : EditorWindow
     /// </summary>
     private string GetDisplayPanelName()
     {
-        if (CurrentBindings != null && !string.IsNullOrEmpty(CurrentBindings.panelName))
+        if (CurrentBindings != null && !string.IsNullOrEmpty(CurrentBindings.targetName))
         {
-            return CurrentBindings.panelName;
+            return CurrentBindings.targetName;
         }
         else if (bindTarget != null && !string.IsNullOrEmpty(bindTarget.name))
         {
@@ -1082,7 +1086,7 @@ public class UIBindToolWindow : EditorWindow
     private void DrawBaseClassOrInterfaceNames(UIBindToolSettingsDataItem settings)
     {
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("基类或接口名称:", GUILayout.Width(120));
+        EditorGUILayout.LabelField("基类名称:", GUILayout.Width(100));
         EditorGUILayout.LabelField(settings.baseClassOrInterfaceNames);
         EditorGUILayout.EndHorizontal();
     }
@@ -1094,7 +1098,8 @@ public class UIBindToolWindow : EditorWindow
     {
         // Use Namespace Toggle
         EditorGUILayout.BeginHorizontal();
-        bool newUseNamespace = EditorGUILayout.Toggle("使用命名空间", settings.useNamespace);
+        EditorGUILayout.LabelField("使用命名空间:", GUILayout.Width(100));
+        bool newUseNamespace = EditorGUILayout.Toggle("", settings.useNamespace, GUILayout.Width(100));
         if (newUseNamespace != settings.useNamespace)
         {
             settings.useNamespace = newUseNamespace;
@@ -1449,7 +1454,7 @@ public class UIBindToolWindow : EditorWindow
     /// </summary>
     private string GetPreviewFileName()
     {
-        if (CurrentBindings == null || string.IsNullOrEmpty(CurrentBindings.panelName))
+        if (CurrentBindings == null || string.IsNullOrEmpty(CurrentBindings.targetName))
         {
             return "UIBinding.cs";
         }
@@ -1458,11 +1463,11 @@ public class UIBindToolWindow : EditorWindow
         var currentSettings = UIBindDataManager.GetCurrentSettingsItem();
         if (currentSettings == null)
         {
-            return $"{CurrentBindings.panelName}.cs";
+            return $"{CurrentBindings.targetName}.cs";
         }
 
         // 清理Panel名称，移除空格和特殊字符
-        string className = CurrentBindings.panelName;
+        string className = CurrentBindings.targetName;
         className = System.Text.RegularExpressions.Regex.Replace(className, @"[^a-zA-Z0-9_]", "");
 
         // 确保首字母大写
