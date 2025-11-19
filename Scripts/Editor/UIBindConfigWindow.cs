@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -80,6 +82,14 @@ public class UIBindConfigWindow : EditorWindow
 
         // 更新变量名
         UpdateVariableName();
+
+        EditorApplication.hierarchyChanged -= RefreshAvailableComponents;
+        EditorApplication.hierarchyChanged += RefreshAvailableComponents;
+    }
+
+    private void OnDestroy()
+    {
+        EditorApplication.hierarchyChanged -= RefreshAvailableComponents;
     }
 
     void UpdateVariableName()
@@ -217,60 +227,96 @@ public class UIBindConfigWindow : EditorWindow
     // 第二层：组件类型选择
     private void DrawComponentTypeSelection()
     {
-        EditorGUILayout.LabelField("组件类型:", EditorStyles.boldLabel);
-
-        if (availableComponentTypes.Count == 0)
+        // 第一行：标签和"+"按钮
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("组件类型:", EditorStyles.boldLabel, GUILayout.ExpandWidth(false));
+        GUILayout.FlexibleSpace();
+        if (GUILayout.Button("+", GUILayout.MinWidth(32)))
         {
-            EditorGUILayout.LabelField("没有可用的组件", EditorStyles.miniLabel);
-            return;
+            ShowComponentSelectorDialog();
         }
+        EditorGUILayout.EndHorizontal();
 
         // 获取当前对象的已绑定组件
         List<Type> boundComponentTypes = GetBoundComponentTypes();
         // 每行显示的按钮数量，根据窗口宽度自动调整
         int buttonsPerRow = CalculateButtonsPerRow();
 
-        for (int i = 0; i < availableComponentTypes.Count; i++)
+        // 绘制组件按钮
+        if (availableComponentTypes.Count > 0)
         {
-            var componentType = availableComponentTypes[i];
-            bool isSelected = selectedComponentType == componentType;
-            bool isBound = boundComponentTypes.Contains(componentType);
+            for (int i = 0; i < availableComponentTypes.Count; i++)
+            {
+                var componentType = availableComponentTypes[i];
+                bool isSelected = selectedComponentType == componentType;
+                bool isBound = boundComponentTypes.Contains(componentType);
 
-            // 每行开始一个新的水平布局
-            if (i % buttonsPerRow == 0)
-            {
-                EditorGUILayout.BeginHorizontal();
-            }
-
-            // 设置按钮样式
-            if (isSelected)
-            {
-                GUI.backgroundColor = Color.cyan; // 选中时的高亮颜色
-            }
-            else if (isBound)
-            {
-                GUI.backgroundColor = Color.gray; // 已绑定的组件显示为灰色
-            }
-
-            // 绘制按钮
-            GUI.enabled = !isBound; // 已绑定的组件禁用
-            if (GUILayout.Button(componentType.Name))
-            {
-                if (!isSelected)
+                // 每行开始一个新的水平布局
+                if (i % buttonsPerRow == 0)
                 {
-                    selectedComponentType = componentType;
-                    UpdateVariableName();
+                    EditorGUILayout.BeginHorizontal();
+                }
+
+                // 设置按钮样式
+                if (isSelected)
+                {
+                    GUI.backgroundColor = Color.cyan; // 选中时的高亮颜色
+                }
+                else if (isBound)
+                {
+                    GUI.backgroundColor = Color.gray; // 已绑定的组件显示为灰色
+                }
+
+                // 绘制按钮
+                GUI.enabled = !isBound; // 已绑定的组件禁用
+                if (GUILayout.Button(componentType.Name))
+                {
+                    if (!isSelected)
+                    {
+                        selectedComponentType = componentType;
+                        UpdateVariableName();
+                    }
+                }
+                GUI.enabled = true; // 恢复启用状态
+
+                // 恢复原始颜色
+                GUI.backgroundColor = Color.white;
+
+                // 每行结束水平布局
+                if (i % buttonsPerRow == buttonsPerRow - 1 || i == availableComponentTypes.Count - 1)
+                {
+                    EditorGUILayout.EndHorizontal();
                 }
             }
-            GUI.enabled = true; // 恢复启用状态
+        }
+        else
+        {
+            EditorGUILayout.LabelField("没有可用的组件", EditorStyles.miniLabel);
+        }
+    }
 
-            // 恢复原始颜色
-            GUI.backgroundColor = Color.white;
+    // 显示组件选择对话框
+    private void ShowComponentSelectorDialog()
+    {
+        Selection.activeGameObject = targetObjectInPrefab;
+        EditorApplication.ExecuteMenuItem("Component/Add...");
+    }
 
-            // 每行结束水平布局
-            if (i % buttonsPerRow == buttonsPerRow - 1 || i == availableComponentTypes.Count - 1)
+    // 刷新可用组件列表
+    private void RefreshAvailableComponents()
+    {
+        if (targetObject == null) return;
+
+        availableComponentTypes.Clear();
+
+        // 重新获取对象的所有组件
+        var allComponents = targetObject.GetComponents<Component>();
+
+        foreach (var component in allComponents)
+        {
+            if (component != null)
             {
-                EditorGUILayout.EndHorizontal();
+                availableComponentTypes.Add(component.GetType());
             }
         }
     }
