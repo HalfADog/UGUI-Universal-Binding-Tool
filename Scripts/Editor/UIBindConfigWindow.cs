@@ -306,7 +306,6 @@ public class UIBindConfigWindow : EditorWindow
     private void RefreshAvailableComponents()
     {
         if (targetObject == null) return;
-
         availableComponentTypes.Clear();
 
         // 重新获取对象的所有组件
@@ -319,6 +318,7 @@ public class UIBindConfigWindow : EditorWindow
                 availableComponentTypes.Add(component.GetType());
             }
         }
+        Selection.activeGameObject = rootPanel;
     }
 
     /// <summary>
